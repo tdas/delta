@@ -21,7 +21,7 @@ scalaVersion := "2.12.8"
 version := "0.1.0"
 
 libraryDependencies ++= Seq(
-  "org.apache.hadoop" % "hadoop-client" % "2.6.5"
+  "org.apache.hadoop" % "hadoop-client" % "2.6.5"  // Same version as Spark 2.4.x
 )
 
 unmanagedJars in Compile += file("/Users/tdas/Projects/Databricks/delta-td/target/scala-2.12/delta-core-assembly-0.4.1-SNAPSHOT.jar")

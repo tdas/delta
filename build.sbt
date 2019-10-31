@@ -209,30 +209,13 @@ printClasspath := {
 assemblyShadeRules in assembly := Seq(
   // Packages to exclude from shading because they are not happy when shaded
 
-  // ShadeRule.rename("org.apache.**" -> "@0").inAll,
+
+  ShadeRule.rename("org.apache.hadoop.**" -> "@0").inAll,       // Do not change any references to hadoop classes as they will be provided
+  ShadeRule.rename("org.apache.spark.**" -> "@0").inAll,        // Scala package object does not resolve correctly when package changed
+  ShadeRule.rename("org.apache.log4j.**" -> "@0").inAll,        // Initialization via reflection fails when package changed
+  ShadeRule.rename("org.apache.commons.**" -> "@0").inAll,      // Initialization via reflection fails when package changed
   /*
-  All top level package names
-
-    aix
-    assets
-    avro
-    codegen
-    com
-    darwin
-    delta
-    fr
-    include
-    javassist
-    javax
-    jersey
-    linux
-    org
-    scala
-
-
-
-  All org.apache.*
-
+  All org.apache.* before shading
     arrow
     avro
     commons
@@ -247,10 +230,6 @@ assemblyShadeRules in assembly := Seq(
     xbean
     zookeeper
   */
-  ShadeRule.rename("org.apache.hadoop.**" -> "@0").inAll,       // Do not change any references to hadoop classes as they will be provided
-  ShadeRule.rename("org.apache.spark.**" -> "@0").inAll,        // Scala package object does not resolve correctly when package changed
-  ShadeRule.rename("org.apache.log4j.**" -> "@0").inAll,        // Initialization via reflect fails when package changed
-  ShadeRule.rename("org.apache.commons.**" -> "@0").inAll,      // Initialization via reflect fails when package changed
   ShadeRule.rename("org.xerial.snappy.*Native*" -> "@0").inAll, // JNI class fails to resolve native code when package changed
   ShadeRule.rename("javax.**" -> "@0").inAll,
   ShadeRule.rename("com.sun.**" -> "@0").inAll,
@@ -265,6 +244,26 @@ assemblyShadeRules in assembly := Seq(
   ShadeRule.rename("avro.**" -> "shadedelta.@0").inAll,
   ShadeRule.rename("codegen.**" -> "shadedelta.@0").inAll,
   ShadeRule.rename("jersey.**" -> "shadedelta.@0").inAll,
+  ShadeRule.rename("javassist.**" -> "shadedelta.@0").inAll,
+
+  /*
+  All top level package names left after shading
+    aix
+    assets
+    com
+    darwin
+    delta
+    fr
+    include
+    javassist
+    javax
+    linux
+    org
+    scala
+    shaded
+    shadedelta
+    win
+  */
 
   // Remove things we know are not needed
   ShadeRule.zap("py4j**").inAll,
@@ -275,8 +274,8 @@ assemblyShadeRules in assembly := Seq(
 logLevel in assembly := Level.Debug
 
 /********************
- * Release settings *
- ********************/
+* Release settings *
+********************/
 
 publishMavenStyle := true
 
@@ -285,48 +284,48 @@ releaseCrossBuild := true
 licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))
 
 pomExtra :=
-  <url>https://delta.io/</url>
-    <scm>
-      <url>git@github.com:delta-io/delta.git</url>
-      <connection>scm:git:git@github.com:delta-io/delta.git</connection>
-    </scm>
-    <developers>
-      <developer>
-        <id>marmbrus</id>
-        <name>Michael Armbrust</name>
-        <url>https://github.com/marmbrus</url>
-      </developer>
-      <developer>
-        <id>brkyvz</id>
-        <name>Burak Yavuz</name>
-        <url>https://github.com/brkyvz</url>
-      </developer>
-      <developer>
-        <id>jose-torres</id>
-        <name>Jose Torres</name>
-        <url>https://github.com/jose-torres</url>
-      </developer>
-      <developer>
-        <id>liwensun</id>
-        <name>Liwen Sun</name>
-        <url>https://github.com/liwensun</url>
-      </developer>
-      <developer>
-        <id>mukulmurthy</id>
-        <name>Mukul Murthy</name>
-        <url>https://github.com/mukulmurthy</url>
-      </developer>
-      <developer>
-        <id>tdas</id>
-        <name>Tathagata Das</name>
-        <url>https://github.com/tdas</url>
-      </developer>
-      <developer>
-        <id>zsxwing</id>
-        <name>Shixiong Zhu</name>
-        <url>https://github.com/zsxwing</url>
-      </developer>
-    </developers>
+<url>https://delta.io/</url>
+  <scm>
+    <url>git@github.com:delta-io/delta.git</url>
+    <connection>scm:git:git@github.com:delta-io/delta.git</connection>
+  </scm>
+  <developers>
+    <developer>
+      <id>marmbrus</id>
+      <name>Michael Armbrust</name>
+      <url>https://github.com/marmbrus</url>
+    </developer>
+    <developer>
+      <id>brkyvz</id>
+      <name>Burak Yavuz</name>
+      <url>https://github.com/brkyvz</url>
+    </developer>
+    <developer>
+      <id>jose-torres</id>
+      <name>Jose Torres</name>
+      <url>https://github.com/jose-torres</url>
+    </developer>
+    <developer>
+      <id>liwensun</id>
+      <name>Liwen Sun</name>
+      <url>https://github.com/liwensun</url>
+    </developer>
+    <developer>
+      <id>mukulmurthy</id>
+      <name>Mukul Murthy</name>
+      <url>https://github.com/mukulmurthy</url>
+    </developer>
+    <developer>
+      <id>tdas</id>
+      <name>Tathagata Das</name>
+      <url>https://github.com/tdas</url>
+    </developer>
+    <developer>
+      <id>zsxwing</id>
+      <name>Shixiong Zhu</name>
+      <url>https://github.com/zsxwing</url>
+    </developer>
+  </developers>
 
 bintrayOrganization := Some("delta-io")
 
@@ -335,13 +334,13 @@ bintrayRepository := "delta"
 import ReleaseTransformations._
 
 releaseProcess := Seq[ReleaseStep](
-  checkSnapshotDependencies,
-  inquireVersions,
-  runTest,
-  setReleaseVersion,
-  commitReleaseVersion,
-  tagRelease,
-  publishArtifacts,
-  setNextVersion,
-  commitNextVersion
+checkSnapshotDependencies,
+inquireVersions,
+runTest,
+setReleaseVersion,
+commitReleaseVersion,
+tagRelease,
+publishArtifacts,
+setNextVersion,
+commitNextVersion
 )
