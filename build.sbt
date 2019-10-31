@@ -211,6 +211,26 @@ assemblyShadeRules in assembly := Seq(
 
   // ShadeRule.rename("org.apache.**" -> "@0").inAll,
   /*
+  All top level package names
+
+    aix
+    assets
+    avro
+    codegen
+    com
+    darwin
+    delta
+    fr
+    include
+    javassist
+    javax
+    jersey
+    linux
+    org
+    scala
+
+
+
   All org.apache.*
 
     arrow
@@ -242,6 +262,9 @@ assemblyShadeRules in assembly := Seq(
   ShadeRule.rename("org.**" -> "shadedelta.@0").inAll,
   ShadeRule.rename("io.**" -> "shadedelta.@0").inAll,
   ShadeRule.rename("net.**" -> "shadedelta.@0").inAll,
+  ShadeRule.rename("avro.**" -> "shadedelta.@0").inAll,
+  ShadeRule.rename("codegen.**" -> "shadedelta.@0").inAll,
+  ShadeRule.rename("jersey.**" -> "shadedelta.@0").inAll,
 
   // Remove things we know are not needed
   ShadeRule.zap("py4j**").inAll,
