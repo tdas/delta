@@ -26,10 +26,11 @@ sparkVersion := "2.4.2"
 
 libraryDependencies ++= Seq(
   // Adding test classifier seems to break transitive resolution of the core dependencies
-  "org.apache.spark" %% "spark-hive" % sparkVersion.value % "provided",
-  "org.apache.spark" %% "spark-sql" % sparkVersion.value % "provided",
-  "org.apache.spark" %% "spark-core" % sparkVersion.value % "provided",
-  "org.apache.spark" %% "spark-catalyst" % sparkVersion.value % "provided",
+  "org.apache.spark" %% "spark-core" % sparkVersion.value excludeAll(ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark" %% "spark-catalyst" % sparkVersion.value excludeAll (ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark" %% "spark-sql" % sparkVersion.value excludeAll (ExclusionRule("org.apache.hadoop")),
+  "org.apache.spark" %% "spark-hive" % sparkVersion.value % "provided" excludeAll (ExclusionRule("org.apache.hadoop")),
+  "org.apache.hadoop" % "hadoop-client" % "2.6.5" % "provided",
 
   // Test deps
   "org.scalatest" %% "scalatest" % "3.0.5" % "test",
@@ -169,6 +170,86 @@ packagedArtifacts in publishM2 <<= packagedArtifacts in spPublishLocal
 packageBin in Compile := spPackage.value
 
 sparkComponents := Seq("sql")
+
+/*************************
+ * SBT Assembly settings *
+ * ************************/
+
+test in assembly := {}
+
+assemblyMergeStrategy in assembly := {
+  case m if m.toLowerCase.endsWith("manifest.mf")          => MergeStrategy.discard
+  case m if m.toLowerCase.matches("meta-inf.*\\.sf$")      => MergeStrategy.discard
+  case "log4j.properties"                                  => MergeStrategy.discard
+  case m if m.toLowerCase.startsWith("meta-inf/services/") => MergeStrategy.filterDistinctLines
+  case "reference.conf"                                    => MergeStrategy.concat
+  case _                                                   => MergeStrategy.first
+}
+
+/*
+lazy val printClasspath = taskKey[Seq[java.io.File]]("Dump classpath")
+
+printClasspath := {
+  val jarFiles = (fullClasspath in Runtime value).map(_.data)
+  jarFiles
+    .filter(_.getName.endsWith("jar"))
+    .map(new java.util.jar.JarFile(_)).foreach { jarFile =>
+    println("===== " + jarFile.getName())
+    val enum = jarFile.entries()
+    while(enum.hasMoreElements()) {
+      val jarEntry = enum.nextElement()
+      println(jarEntry.getName())
+    }
+  }
+  // files.foreach(println)
+  jarFiles
+}
+*/
+
+assemblyShadeRules in assembly := Seq(
+  // Packages to exclude from shading because they are not happy when shaded
+
+  // ShadeRule.rename("org.apache.**" -> "@0").inAll,
+  /*
+  All org.apache.*
+
+    arrow
+    avro
+    commons
+    curator
+    ivy
+    jute
+    log4j
+    orc
+    oro
+    parquet
+    spark
+    xbean
+    zookeeper
+  */
+  ShadeRule.rename("org.apache.hadoop.**" -> "@0").inAll,       // Do not change any references to hadoop classes as they will be provided
+  ShadeRule.rename("org.apache.spark.**" -> "@0").inAll,        // Scala package object does not resolve correctly when package changed
+  ShadeRule.rename("org.apache.log4j.**" -> "@0").inAll,        // Initialization via reflect fails when package changed
+  ShadeRule.rename("org.apache.commons.**" -> "@0").inAll,      // Initialization via reflect fails when package changed
+  ShadeRule.rename("org.xerial.snappy.*Native*" -> "@0").inAll, // JNI class fails to resolve native code when package changed
+  ShadeRule.rename("javax.**" -> "@0").inAll,
+  ShadeRule.rename("com.sun.**" -> "@0").inAll,
+  ShadeRule.rename("com.fasterxml.**" -> "@0").inAll,           // Scala reflect trigger via catalyst fails when package changed
+  ShadeRule.rename("com.databricks.**" -> "@0").inAll,          // Scala package object does not resolve correctly when package changed
+
+  // Shade everything else
+  ShadeRule.rename("com.**" -> "shadedelta.@0").inAll,
+  ShadeRule.rename("org.**" -> "shadedelta.@0").inAll,
+  ShadeRule.rename("io.**" -> "shadedelta.@0").inAll,
+  ShadeRule.rename("net.**" -> "shadedelta.@0").inAll,
+
+  // Remove things we know are not needed
+  ShadeRule.zap("py4j**").inAll,
+  ShadeRule.zap("webapps**").inAll,
+  ShadeRule.zap("delta**").inAll
+)
+
+logLevel in assembly := Level.Debug
 
 /********************
  * Release settings *
