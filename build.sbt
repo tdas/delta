@@ -238,6 +238,8 @@ lazy val releaseSettings = Seq(
     }
   },
 
+  pgpPassphrase := Some(Array('d', 'e', 'l', 't', 'a')),
+
   releaseCrossBuild := true,
 
   releaseProcess := Seq[ReleaseStep](
@@ -251,8 +253,6 @@ lazy val releaseSettings = Seq(
     setNextVersion,
     commitNextVersion
   ),
-
-  useGpg := true,
 
   licenses += ("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0")),
 
@@ -306,3 +306,4 @@ publishArtifact := false  // Don't release the root project
 publish := {}
 publishTo := Some("snapshots" at "https://oss.sonatype.org/content/repositories/snapshots")
 releaseCrossBuild := false
+pgpPassphrase := Some(Array('d', 'e', 'l', 't', 'a'))
