@@ -21,7 +21,7 @@ resolvers += "bintray-spark-packages" at "https://dl.bintray.com/spark-packages/
 
 resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
 
-addSbtPlugin("com.github.gseitz" % "sbt-release" % "1.0.0")
+addSbtPlugin("com.github.sbt" % "sbt-release" % "1.0.15")
 
 addSbtPlugin("org.xerial.sbt" % "sbt-sonatype" % "2.3")
 
