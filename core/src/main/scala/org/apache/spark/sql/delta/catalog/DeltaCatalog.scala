@@ -173,9 +173,12 @@ class DeltaCatalog extends DelegatingCatalogExtension
 
   override def loadTable(ident: Identifier): Table = recordFrameProfile(
       "DeltaCatalog", "loadTable") {
+    // scalastyle:off println
+    println("Loading table: " + ident)
     try {
       super.loadTable(ident) match {
         case v1: V1Table if DeltaTableUtils.isDeltaTable(v1.catalogTable) =>
+          println("converting to DeltaTableV2")
           DeltaTableV2(
             spark,
             new Path(v1.catalogTable.location),

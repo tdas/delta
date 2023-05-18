@@ -229,6 +229,8 @@ class DeltaLog private(
   def startTransaction(snapshotOpt: Option[Snapshot]): OptimisticTransaction = {
     val txn = new OptimisticTransaction(this, snapshotOpt)
     Option(catalogTable.get).foreach { ct =>
+      // scalastyle:off println
+      println("registering post commit hook for table: " + ct)
       txn.registerPostCommitHook(new UpdateCatalog(ct))
     }
     txn
