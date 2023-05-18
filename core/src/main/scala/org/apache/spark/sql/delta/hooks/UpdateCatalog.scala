@@ -25,6 +25,8 @@ import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.delta.{DeltaConfigs, OptimisticTransactionImpl, Snapshot}
 import org.apache.spark.sql.delta.actions.{Action, Metadata}
 
+// scalastyle:off println
+
 /**
  * Base trait for post commit hooks that want to update the catalog with the
  * latest table schema and properties.
@@ -41,6 +43,7 @@ case class UpdateCatalog(table: CatalogTable) extends PostCommitHook with DeltaL
     actions: Seq[Action]): Unit = {
     // There's a potential race condition here, where a newer commit has already triggered
     // this to run. That's fine.
+    println("Running the post commit hook")
     execute(spark, postCommitSnapshot)
   }
 
@@ -73,6 +76,7 @@ case class UpdateCatalog(table: CatalogTable) extends PostCommitHook with DeltaL
   def schemaHasChanged(snapshot: Snapshot, spark: SparkSession): Boolean = {
     // We need to check whether the schema in the catalog matches the current schema.
     val schemaChanged = snapshot.schema != table.schema
+    println("schema has changed")
     schemaChanged && spark.sessionState.catalog.tableExists(table.identifier)
   }
 
@@ -99,6 +103,7 @@ case class UpdateCatalog(table: CatalogTable) extends PostCommitHook with DeltaL
    * Update the schema in the catalog based on the provided snapshot.
    */
   def updateSchema(spark: SparkSession, snapshot: Snapshot): Unit = {
+    println("updating schema")
     UpdateCatalog.replaceTable(spark, snapshot, table)
   }
 
@@ -125,8 +130,10 @@ object UpdateCatalog {
     // having to be at the end of the schema, which Hive follows.
     val catalogName = table.identifier.catalog.getOrElse(
       spark.sessionState.catalogManager.currentCatalog.name())
-    if (catalogName == catalogName == SESSION_CATALOG_NAME &&
+    println("catalog name: " + catalogName)
+    if (catalogName == SESSION_CATALOG_NAME &&
       catalog.externalCatalog.tableExists(db, tblName)) {
+      println("updating schema to " + schema)
       catalog.externalCatalog.alterTableDataSchema(db, tblName, schema)
     }
 

@@ -167,7 +167,7 @@ case class DeltaTableV2(
 
   override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = {
     // scalastyle:off println
-    println("newWriteBuilder.catalogTable: " + catalogTable)
+    println("newWriteBuilder.catalogTable.nonEmpty: " + catalogTable.nonEmpty)
     catalogTable.foreach(ct => deltaLog.withTableDefinition(ct))
     new WriteIntoDeltaBuilder(deltaLog, info.options)
   }
