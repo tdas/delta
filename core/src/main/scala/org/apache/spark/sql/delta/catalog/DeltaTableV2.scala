@@ -166,6 +166,7 @@ case class DeltaTableV2(
 
 
   override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = {
+    catalogTable.foreach(ct => deltaLog.withTableDefinition(ct))
     new WriteIntoDeltaBuilder(deltaLog, info.options)
   }
 

@@ -21,6 +21,7 @@ import java.io.File
 import java.lang.ref.WeakReference
 import java.net.URI
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.ReentrantLock
 
 import scala.collection.JavaConverters._
@@ -29,6 +30,7 @@ import scala.util.Try
 import scala.util.control.NonFatal
 
 import com.databricks.spark.util.TagDefinitions._
+
 import org.apache.spark.sql.delta.actions._
 import org.apache.spark.sql.delta.commands.WriteIntoDelta
 import org.apache.spark.sql.delta.commands.cdc.CDCReader
@@ -48,6 +50,7 @@ import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogStatistics, Cat
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.AnalysisHelper
 import org.apache.spark.sql.catalyst.util.FailFastMode
+import org.apache.spark.sql.delta.hooks.UpdateCatalog
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.internal.SQLConf
@@ -120,6 +123,12 @@ class DeltaLog private(
   /** Delta History Manager containing version and commit history. */
   lazy val history = new DeltaHistoryManager(
     this, spark.sessionState.conf.getConf(DeltaSQLConf.DELTA_HISTORY_PAR_SEARCH_THRESHOLD))
+
+  // The latest table referenced by this DeltaLog. We assume that multiple external tables pointing
+  // to the same Delta table are very rare. All transactions created from this DeltaLog instance
+  // will then try to update metadata in the metastore if necessary
+  private[delta] val catalogTable: AtomicReference[CatalogTable] =
+    new AtomicReference[CatalogTable]()
 
   /* --------------- *
    |  Configuration  |
@@ -200,6 +209,13 @@ class DeltaLog private(
    |  Delta Management  |
    * ------------------ */
 
+  /** Link the given table definition in the MetaStore to this DeltaLog instance. */
+  def withTableDefinition(table: CatalogTable): DeltaLog = {
+    catalogTable.getAndSet(table)
+    this
+  }
+
+
   /**
    * Returns a new [[OptimisticTransaction]] that can be used to read the current state of the
    * log and then commit updates. The reads and updates will be checked for logical conflicts
@@ -211,7 +227,11 @@ class DeltaLog private(
   def startTransaction(): OptimisticTransaction = startTransaction(None)
 
   def startTransaction(snapshotOpt: Option[Snapshot]): OptimisticTransaction = {
-    new OptimisticTransaction(this, snapshotOpt)
+    val txn = new OptimisticTransaction(this, snapshotOpt)
+    Option(catalogTable.get).foreach { ct =>
+      txn.registerPostCommitHook(new UpdateCatalog(ct))
+    }
+    txn
   }
 
   /**
