@@ -59,11 +59,14 @@ object Action {
 
   /**
    * The maximum protocol version we are currently allowed to use, with or without all recognized
-   * features.
+   * features. Optionally, some features can be excluded using `featuresToExclude`.
    */
-  private[delta] def supportedProtocolVersion(withAllFeatures: Boolean = true): Protocol = {
+  private[delta] def supportedProtocolVersion(
+      withAllFeatures: Boolean = true,
+      featuresToExclude: Seq[TableFeature] = Seq.empty): Protocol = {
     if (withAllFeatures) {
-      protocolVersion.withFeatures(TableFeature.allSupportedFeaturesMap.values)
+      val featuresToAdd = TableFeature.allSupportedFeaturesMap.values.toSet -- featuresToExclude
+      protocolVersion.withFeatures(featuresToAdd)
     } else {
       protocolVersion
     }
@@ -98,6 +101,7 @@ object Action {
   }
 
   lazy val logSchema = ExpressionEncoder[SingleAction].schema
+  lazy val addFileSchema = logSchema("add").dataType.asInstanceOf[StructType]
 }
 
 /**
@@ -295,7 +299,11 @@ object Protocol {
     // There might be features enabled by the table properties aka
     // `CREATE TABLE ... TBLPROPERTIES ...`.
     val tablePropEnabledFeatures = getSupportedFeaturesFromTableConfigs(tableConf)
-    val metaEnabledFeatures = extractAutomaticallyEnabledFeatures(spark, metadata)
+    // To enable features that are being dependent by `tablePropEnabledFeatures`, we pass it here to
+    // let [[getDependencyClosure]] collect them.
+    val metaEnabledFeatures =
+      extractAutomaticallyEnabledFeatures(
+        spark, metadata, Some(Protocol().withFeatures(tablePropEnabledFeatures)))
     val allEnabledFeatures = tablePropEnabledFeatures ++ metaEnabledFeatures
 
     // Determine the min reader and writer version required by features in table properties or

@@ -92,7 +92,7 @@ private[delta] class WinningCommitSummary(val actions: Seq[Action], val commitVe
 
   val metadataUpdates: Seq[Metadata] = actions.collect { case a: Metadata => a }
   val appLevelTransactions: Seq[SetTransaction] = actions.collect { case a: SetTransaction => a }
-  val protocol: Seq[Protocol] = actions.collect { case a: Protocol => a }
+  val protocol: Option[Protocol] = actions.collectFirst { case a: Protocol => a }
   val commitInfo: Option[CommitInfo] = actions.collectFirst { case a: CommitInfo => a }.map(
     ci => ci.copy(version = Some(commitVersion)))
   val removedFiles: Seq[RemoveFile] = actions.collect { case a: RemoveFile => a }
@@ -140,6 +140,7 @@ private[delta] class ConflictChecker(
     checkForDeletedFilesAgainstCurrentTxnDeletedFiles()
     checkForUpdatedApplicationTransactionIdsThatCurrentTxnDependsOn()
     reassignOverlappingRowIds()
+    reassignRowCommitVersions()
     checkIfDomainMetadataConflict()
     logMetrics()
     currentTransactionInfo
@@ -168,6 +169,7 @@ private[delta] class ConflictChecker(
       winningCommitSummary.protocol.foreach { p =>
         deltaLog.protocolRead(p)
         deltaLog.protocolWrite(p)
+        currentTransactionInfo = currentTransactionInfo.copy(protocol = p)
       }
       if (currentTransactionInfo.actions.exists(_.isInstanceOf[Protocol])) {
         throw DeltaErrors.protocolChangedException(winningCommitSummary.commitInfo)
@@ -375,32 +377,59 @@ private[delta] class ConflictChecker(
     // The current transaction should only assign Row Ids if they are supported.
     if (!RowId.isSupported(currentTransactionInfo.protocol)) return
 
-    winningCommitSummary.actions.collectFirst {
-      case RowIdHighWaterMark(winningHighWaterMark) =>
-        // The winning transaction assigned conflicting Row IDs. Adjust the Row IDs assigned by the
-        // current transaction as if it had read the result of the winning transaction.
-        val readHighWaterMark = currentTransactionInfo.readRowIdHighWatermark.highWaterMark
-        assert(winningHighWaterMark >= readHighWaterMark)
-        val watermarkDiff = winningHighWaterMark - readHighWaterMark
+    // The winning commit might either only have activated the table feature or it assigned Row IDs.
+    val winningHighWaterMark = winningCommitSummary.actions.collectFirst {
+      case RowIdHighWaterMark(winningHighWaterMark) => winningHighWaterMark
+    }.getOrElse(-1L)
+    val readHighWaterMark = currentTransactionInfo.readRowIdHighWatermark.highWaterMark
 
-        val actionsWithReassignedRowIds = currentTransactionInfo.actions.map {
-          // We should only update the row IDs that were assigned by this transaction, and not the
-          // row IDs that were assigned by an earlier transaction and merely copied over to a new
-          // AddFile as part of this transaction. I.e., we should only update the base row IDs
-          // that are larger than the read high watermark.
-          case a: AddFile if a.baseRowId.exists(_ > readHighWaterMark) =>
-            val newBaseRowId = a.baseRowId.map(_ + watermarkDiff)
-            a.copy(baseRowId = newBaseRowId)
-
-          case waterMark @ RowIdHighWaterMark(v) =>
-            waterMark.copy(highWaterMark = v + watermarkDiff)
-
-          case a => a
+    var highWaterMark = winningHighWaterMark
+    val actionsWithReassignedRowIds = currentTransactionInfo.actions.flatMap {
+      // We should only set missing row IDs and update the row IDs that were assigned by this
+      // transaction, and not the row IDs that were assigned by an earlier transaction and merely
+      // copied over to a new AddFile as part of this transaction. I.e., we should only update the
+      // base row IDs that are larger than the read high watermark.
+      case a: AddFile if !a.baseRowId.exists(_ <= readHighWaterMark) =>
+        val newBaseRowId = highWaterMark + 1L
+        highWaterMark += a.numPhysicalRecords.getOrElse {
+          throw DeltaErrors.rowIdAssignmentWithoutStats
         }
-      currentTransactionInfo = currentTransactionInfo.copy(
-        actions = actionsWithReassignedRowIds,
-        readRowIdHighWatermark = RowIdHighWaterMark(winningHighWaterMark))
+        Some(a.copy(baseRowId = Some(newBaseRowId)))
+      // The RowIdHighWaterMark will be replaced if it exists.
+      case _: RowIdHighWaterMark => None
+      case a => Some(a)
     }
+    currentTransactionInfo = currentTransactionInfo.copy(
+      // Add RowIdHighWaterMark at the front for faster retrieval.
+      actions = RowIdHighWaterMark(highWaterMark) +: actionsWithReassignedRowIds,
+      readRowIdHighWatermark = RowIdHighWaterMark(winningHighWaterMark))
+  }
+
+  /**
+   * Reassigns default row commit versions to correctly handle the winning transaction.
+   * Concretely:
+   *  1. Reassigns all default row commit versions (of AddFiles in the current transaction) equal to
+   *     the version of the winning transaction to the next commit version.
+   *  2. Assigns all unassigned default row commit versions that do not have one assigned yet
+   *     to handle the row tracking feature being enabled by the winning transaction.
+   */
+  private def reassignRowCommitVersions(): Unit = {
+    if (!RowTracking.isSupported(currentTransactionInfo.protocol)) {
+      return
+    }
+
+    val newActions = currentTransactionInfo.actions.map {
+      case a: AddFile if a.defaultRowCommitVersion.contains(winningCommitVersion) =>
+        a.copy(defaultRowCommitVersion = Some(winningCommitVersion + 1L))
+
+      case a: AddFile if a.defaultRowCommitVersion.isEmpty =>
+        // A concurrent transaction has turned on support for Row Tracking.
+        a.copy(defaultRowCommitVersion = Some(winningCommitVersion + 1L))
+
+      case a => a
+    }
+
+    currentTransactionInfo = currentTransactionInfo.copy(actions = newActions)
   }
 
   /** A helper function for pretty printing a specific partition directory. */
