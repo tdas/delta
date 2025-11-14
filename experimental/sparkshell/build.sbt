@@ -15,9 +15,18 @@ assembly / assemblyMergeStrategy := {
     xs match {
       case "MANIFEST.MF" :: Nil => MergeStrategy.discard
       case "services" :: _ => MergeStrategy.concat
+      case "versions" :: _ => MergeStrategy.first
       case _ => MergeStrategy.discard
     }
   case "reference.conf" => MergeStrategy.concat
+  case "module-info.class" => MergeStrategy.discard
+  case PathList("javax", "servlet", xs @ _*) => MergeStrategy.first
+  case PathList("org", "apache", "commons", xs @ _*) => MergeStrategy.first
+  case PathList("org", "apache", "hadoop", xs @ _*) => MergeStrategy.first
+  case PathList("com", "amazonaws", xs @ _*) => MergeStrategy.first
+  case PathList("com", "google", xs @ _*) => MergeStrategy.first
+  case x if x.endsWith(".proto") => MergeStrategy.first
+  case x if x.endsWith(".properties") => MergeStrategy.concat
   case _ => MergeStrategy.first
 }
 
@@ -52,6 +61,12 @@ libraryDependencies ++= Seq(
   
   // Unity Catalog
   "io.unitycatalog" % "unitycatalog-spark_2.13" % "0.3.0",
+  
+  // Cloud Storage Support (S3, ADLS, GCS)
+  "org.apache.hadoop" % "hadoop-aws" % "3.4.0",
+  "org.apache.hadoop" % "hadoop-azure" % "3.4.0",
+  "com.google.cloud.bigdataoss" % "gcs-connector" % "hadoop3-2.2.22",
+  "com.amazonaws" % "aws-java-sdk-bundle" % "1.12.262",
   
   // REST API
   "com.sparkjava" % "spark-core" % "2.9.4",

@@ -48,7 +48,11 @@ class SparkShell:
         cleanup_on_exit: bool = True,
         startup_timeout: int = 60,
         build_timeout: int = 300,
-        spark_configs: Optional[dict] = None
+        spark_configs: Optional[dict] = None,
+        uc_uri: Optional[str] = None,
+        uc_token: Optional[str] = None,
+        uc_catalog: Optional[str] = None,
+        uc_schema: Optional[str] = None
     ):
         """
         Initialize SparkShell.
@@ -64,6 +68,10 @@ class SparkShell:
             build_timeout: Build timeout in seconds (default: 300)
             spark_configs: Dict of Spark configuration options (default: None)
                           Example: {"spark.executor.memory": "2g", "spark.sql.shuffle.partitions": "10"}
+            uc_uri: Unity Catalog server URI (default: None)
+            uc_token: Unity Catalog authentication token (default: None)
+            uc_catalog: Unity Catalog catalog name (default: None, uses "unity" if not specified)
+            uc_schema: Unity Catalog schema name (default: None)
         """
         self.source = source
         self.port = port
@@ -74,6 +82,19 @@ class SparkShell:
         self.startup_timeout = startup_timeout
         self.build_timeout = build_timeout
         self.spark_configs = spark_configs or {}
+        self.uc_uri = uc_uri
+        self.uc_token = uc_token
+        self.uc_catalog = uc_catalog or "unity"  # Default to "unity" if not specified
+        self.uc_schema = uc_schema
+        
+        # Configure Unity Catalog if URI and token are provided
+        if self.uc_uri and self.uc_token:
+            # Register the catalog type
+            self.spark_configs[f"spark.sql.catalog.{self.uc_catalog}"] = "io.unitycatalog.spark.UCSingleCatalog"
+            self.spark_configs[f"spark.sql.catalog.{self.uc_catalog}.uri"] = self.uc_uri
+            self.spark_configs[f"spark.sql.catalog.{self.uc_catalog}.token"] = self.uc_token
+            self.spark_configs["spark.sql.defaultCatalog"] = self.uc_catalog
+            # self.spark_configs[f"spark.sql.catalog.{self.uc_catalog}.warehouse"] = f"/tmp/{self.uc_catalog}-warehouse"
         
         # Runtime state
         self.work_dir: Optional[Path] = None
@@ -310,6 +331,22 @@ class SparkShell:
             if self._check_health():
                 self.is_ready = True
                 print(f"[SparkShell] Server ready at {self.base_url}")
+                
+                # Set Unity Catalog schema if configured (catalog is already set via defaultCatalog config)
+                if self.uc_uri and self.uc_token:
+                    print(f"[SparkShell] Unity Catalog enabled: {self.uc_catalog}")
+                    
+                    if self.uc_schema:
+                        try:
+                            print(f"[SparkShell] Setting default schema: {self.uc_schema}")
+                            self.execute_sql(f"USE {self.uc_schema}")
+                            print(f"[SparkShell] Tables can be referenced as: {self.uc_catalog}.{self.uc_schema}.table_name or table_name")
+                        except RuntimeError as e:
+                            print(f"[SparkShell] Warning: Failed to set schema: {e}")
+                            print(f"[SparkShell] Tables can be referenced as: {self.uc_catalog}.{self.uc_schema}.table_name")
+                    else:
+                        print(f"[SparkShell] Tables must be referenced as: {self.uc_catalog}.schema.table_name")
+                
                 return
             
             # Check if process died

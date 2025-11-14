@@ -55,7 +55,11 @@ SparkShell(
     cleanup_on_exit: bool = True,   # Clean temp files on exit
     startup_timeout: int = 60,      # Startup timeout (seconds)
     build_timeout: int = 300,       # Build timeout (seconds)
-    spark_configs: Optional[dict] = None  # Spark configuration options
+    spark_configs: Optional[dict] = None,  # Spark configuration options
+    uc_uri: Optional[str] = None,   # Unity Catalog server URI
+    uc_token: Optional[str] = None, # Unity Catalog token
+    uc_catalog: Optional[str] = None, # Unity Catalog catalog name (defaults to "unity")
+    uc_schema: Optional[str] = None # Unity Catalog schema name
 )
 ```
 
@@ -162,15 +166,29 @@ with SparkShell(source=".", port=8080, spark_configs=spark_configs) as shell:
 ### Example 7: Unity Catalog Configuration
 
 ```python
-# Configure Unity Catalog connection
-spark_configs = {
-    "spark.sql.catalog.unity.uri": "http://localhost:8081",
-    "spark.sql.catalog.unity.token": "your-uc-token"
-}
+# Configure Unity Catalog with dedicated parameters
+with SparkShell(
+    source=".", 
+    port=8080,
+    uc_uri="http://localhost:8081",
+    uc_token="your-uc-token",
+    uc_catalog="unity",       # Optional, defaults to "unity"
+    uc_schema="my_schema"     # Optional
+) as shell:
+    # Tables can be referenced with three-level namespace
+    result = shell.execute_sql("SELECT * FROM unity.my_schema.my_table")
+    print(result)
+    
+    # Or use short name (since catalog and schema are set as default)
+    result = shell.execute_sql("SELECT * FROM my_table")
+    print(result)
+    
+    # Create table in Unity Catalog
+    shell.execute_sql("CREATE TABLE my_table (id INT, name STRING) USING DELTA")
 
-with SparkShell(source=".", port=8080, spark_configs=spark_configs) as shell:
-    # Query Unity Catalog tables
-    result = shell.execute_sql("SELECT * FROM unity.catalog.schema.table")
+# Minimal UC config (catalog defaults to "unity")
+with SparkShell(source=".", uc_uri="http://localhost:8081", uc_token="token") as shell:
+    result = shell.execute_sql("SHOW CATALOGS")
     print(result)
 ```
 
@@ -278,28 +296,9 @@ python -m pytest tests/test_spark_shell.py -v
 
 # Run example
 python example.py
-```
 
-## Migration from sparkapp_client
-
-**Old (sparkapp_client):**
-```python
-from sparkapp_client import SparkAppClient
-
-# Required manual server start: bin/start.sh
-client = SparkAppClient()
-success, result, error = client.execute_sql("SELECT 1")
-if success:
-    print(result)
-```
-
-**New (SparkShell):**
-```python
-from spark_shell import SparkShell
-
-with SparkShell(source=".") as shell:
-    result = shell.execute_sql("SELECT 1")
-    print(result)  # Automatic start/cleanup!
+# Test Unity Catalog connectivity
+python tests/test_unity_catalog.py --uri http://localhost:8081 --token your-token
 ```
 
 ## Best Practices

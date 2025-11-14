@@ -18,7 +18,8 @@ This is an experimental project within the Delta Lake repository, isolated in th
 - **Build Tool**: SBT 1.9.7 (self-contained in `build/` directory)
 - **Spark**: Apache Spark 4.0.0 (upgraded from 3.5.0)
 - **Delta Lake**: Delta Spark 4.0.0 (for Delta table support)
-- **Unity Catalog**: Unity Catalog Spark 0.2.0 (for UC table access)
+- **Unity Catalog**: Unity Catalog Spark 0.3.0 (for UC table access)
+- **Cloud Storage**: Hadoop AWS 3.4.0, Hadoop Azure 3.4.0, GCS Connector 2.2.22, AWS SDK 1.12.262
 - **HTTP Framework**: Spark Java 2.9.4 (for REST endpoints)
 - **JSON**: Google Gson 2.10.1
 - **Testing**: ScalaTest 3.2.17, Python pytest
@@ -182,6 +183,7 @@ experimental/sparkshell/
 │
 ├── tests/                            # Python tests
 │   ├── test_spark_shell.py           # Integration tests (7)
+│   ├── test_unity_catalog.py         # Unity Catalog test script
 │   └── __init__.py
 │
 ├── spark_shell.py                    # SparkShell class (automatic mgmt)
@@ -239,13 +241,18 @@ with SparkShell(source=".", port=8080) as shell:
 
 **Configuring Unity Catalog:**
 ```python
-spark_configs = {
-    "spark.sql.catalog.unity.uri": "http://localhost:8081",
-    "spark.sql.catalog.unity.token": "your-uc-token"
-}
-
-with SparkShell(source=".", port=8080, spark_configs=spark_configs) as shell:
-    result = shell.execute_sql("SELECT * FROM unity.catalog.schema.table")
+# uc_catalog defaults to "unity" if not specified
+with SparkShell(
+    source=".", 
+    port=8080,
+    uc_uri="http://localhost:8081",
+    uc_token="your-uc-token",
+    uc_schema="my_schema"     # Optional
+) as shell:
+    # Query with three-level namespace
+    result = shell.execute_sql("SELECT * FROM unity.my_schema.my_table")
+    # Or use short name
+    result = shell.execute_sql("SELECT * FROM my_table")
     print(result)
 ```
 

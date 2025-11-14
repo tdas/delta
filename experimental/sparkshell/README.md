@@ -8,8 +8,9 @@ A simple REST API server that executes Spark SQL commands and returns results as
 - Execute SQL commands via simple HTTP POST requests
 - Returns formatted query results or command execution status
 - Supports both queries (SELECT) and commands (CREATE, INSERT, etc.)
-- **Delta Lake support** - Create and query Delta tables
-- **Unity Catalog support** - Access Unity Catalog tables
+- **Delta Lake support** - Create and query Delta tables with ACID transactions
+- **Unity Catalog support** - Access Unity Catalog tables with three-level namespace
+- **Cloud Storage support** - S3, Azure Blob Storage, and Google Cloud Storage
 - Easy to use with curl, Postman, or any HTTP client
 
 ## Building the Application
@@ -293,20 +294,90 @@ with SparkShell(source=".", port=8080, spark_configs=spark_configs) as shell:
 
 #### Configuring Unity Catalog
 
-Unity Catalog requires URI and token configuration through `spark_configs`:
+Unity Catalog can be configured using dedicated parameters:
 
 ```python
 from spark_shell import SparkShell
 
+# Full configuration
+with SparkShell(
+    source=".", 
+    port=8080,
+    uc_uri="http://localhost:8081",
+    uc_token="your-uc-token",
+    uc_catalog="unity",       # Optional, defaults to "unity"
+    uc_schema="my_schema"     # Optional
+) as shell:
+    # Query with three-level namespace
+    result = shell.execute_sql("SELECT * FROM unity.my_schema.my_table")
+    print(result)
+    
+    # Or use short name (catalog.schema already set as default)
+    result = shell.execute_sql("SELECT * FROM my_table")
+    print(result)
+
+# Minimal configuration (uc_catalog defaults to "unity")
+with SparkShell(source=".", uc_uri="http://localhost:8081", uc_token="token") as shell:
+    result = shell.execute_sql("SHOW CATALOGS")
+    print(result)
+```
+
+#### Configuring Cloud Storage
+
+SparkShell includes built-in support for cloud storage (S3, Azure, GCS). Configure access via Spark configurations:
+
+**AWS S3 Example:**
+```python
+from spark_shell import SparkShell
+
 spark_configs = {
-    "spark.sql.catalog.unity.uri": "http://localhost:8081",
-    "spark.sql.catalog.unity.token": "your-uc-token"
+    "spark.hadoop.fs.s3a.access.key": "your-access-key",
+    "spark.hadoop.fs.s3a.secret.key": "your-secret-key",
+    # Optional: for specific endpoint
+    "spark.hadoop.fs.s3a.endpoint": "s3.us-west-2.amazonaws.com"
 }
 
-with SparkShell(source=".", port=8080, spark_configs=spark_configs) as shell:
-    # Query Unity Catalog tables
-    result = shell.execute_sql("SELECT * FROM unity.catalog.schema.table")
+with SparkShell(source=".", spark_configs=spark_configs) as shell:
+    # Create table on S3
+    shell.execute_sql("""
+        CREATE TABLE my_table (id INT, name STRING) 
+        USING DELTA 
+        LOCATION 's3a://my-bucket/path/to/table'
+    """)
+    
+    # Insert and query data
+    shell.execute_sql("INSERT INTO my_table VALUES (1, 'Alice'), (2, 'Bob')")
+    result = shell.execute_sql("SELECT * FROM my_table")
     print(result)
+```
+
+**Azure Blob Storage Example:**
+```python
+spark_configs = {
+    "spark.hadoop.fs.azure.account.key.mystorageaccount.dfs.core.windows.net": "your-storage-key"
+}
+
+with SparkShell(source=".", spark_configs=spark_configs) as shell:
+    shell.execute_sql("""
+        CREATE TABLE my_table (id INT, name STRING) 
+        USING DELTA 
+        LOCATION 'abfss://container@mystorageaccount.dfs.core.windows.net/path/to/table'
+    """)
+```
+
+**Google Cloud Storage Example:**
+```python
+spark_configs = {
+    "spark.hadoop.google.cloud.auth.service.account.json.keyfile": "/path/to/keyfile.json",
+    "spark.hadoop.fs.gs.project.id": "your-project-id"
+}
+
+with SparkShell(source=".", spark_configs=spark_configs) as shell:
+    shell.execute_sql("""
+        CREATE TABLE my_table (id INT, name STRING) 
+        USING DELTA 
+        LOCATION 'gs://my-bucket/path/to/table'
+    """)
 ```
 
 #### Running the Example Scripts
@@ -329,11 +400,15 @@ These will demonstrate:
 
 ### SparkShell API Reference
 
-**SparkShell(source, port=8080, spark_configs=None, ...)**
-- `source`: Path to SparkApp code (local or GitHub URL)
+**SparkShell(source, port=8080, spark_configs=None, uc_uri=None, uc_token=None, uc_catalog=None, uc_schema=None, ...)**
+- `source`: Path to SparkShell code (local or GitHub URL)
 - `port`: Server port (default: 8080)
 - `spark_configs`: Dict of Spark configuration options (optional)
   - Example: `{"spark.executor.memory": "2g", "spark.sql.shuffle.partitions": "10"}`
+- `uc_uri`: Unity Catalog server URI (optional)
+- `uc_token`: Unity Catalog authentication token (optional)
+- `uc_catalog`: Unity Catalog catalog name (optional, defaults to "unity" if UC is configured)
+- `uc_schema`: Unity Catalog schema name (optional)
 - `execute_sql(sql: str) -> str`: Execute SQL and return result string (raises RuntimeError on failure)
 - `get_server_info() -> dict`: Get server information including Spark version
 - `server_info() -> dict`: Get server information including Spark version
@@ -368,8 +443,8 @@ This script will:
 build/sbt test
 
 # Run specific test suite
-build/sbt "testOnly com.sparkapp.SparkSqlExecutorSpec"
-build/sbt "testOnly com.sparkapp.JsonSerializationSpec"
+build/sbt "testOnly com.sparkshell.SparkSqlExecutorSpec"
+build/sbt "testOnly com.sparkshell.JsonSerializationSpec"
 ```
 
 **Python Tests:**
@@ -382,6 +457,9 @@ python tests/test_spark_shell.py
 
 # Or with pytest
 python -m pytest tests/test_spark_shell.py -v
+
+# Test Unity Catalog connectivity (requires UC server)
+python tests/test_unity_catalog.py --uri http://localhost:8081 --token your-token --uc-catalog unity --uc-schema default
 ```
 
 ### Test Coverage
