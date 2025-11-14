@@ -124,7 +124,54 @@ class TestSparkShell(unittest.TestCase):
         self.assertIn("avg_age", result)
         print("✓ Aggregation query successful")
 
-    def test_04_error_handling(self):
+    def test_04_delta_operations(self):
+        """Test Delta Lake operations."""
+        # Drop table if exists
+        try:
+            self.shell.execute_sql("DROP TABLE IF EXISTS delta_test")
+        except:
+            pass
+        
+        # Create Delta table
+        result = self.shell.execute_sql(
+            "CREATE TABLE delta_test (id INT, value STRING, amount DOUBLE) USING DELTA"
+        )
+        self.assertIsNotNone(result)
+        print("✓ Create Delta table successful")
+        
+        # Insert data into Delta table
+        result = self.shell.execute_sql(
+            "INSERT INTO delta_test VALUES (1, 'a', 10.5), (2, 'b', 20.0), (3, 'c', 30.5)"
+        )
+        self.assertIsNotNone(result)
+        
+        # Query Delta table
+        result = self.shell.execute_sql("SELECT * FROM delta_test ORDER BY id")
+        self.assertIn("a", result)
+        self.assertIn("b", result)
+        self.assertIn("c", result)
+        
+        # Update Delta table
+        result = self.shell.execute_sql("UPDATE delta_test SET amount = 15.0 WHERE id = 1")
+        self.assertIsNotNone(result)
+        
+        # Verify update
+        result = self.shell.execute_sql("SELECT amount FROM delta_test WHERE id = 1")
+        self.assertIn("15", result)
+        
+        # Delete from Delta table
+        result = self.shell.execute_sql("DELETE FROM delta_test WHERE id = 3")
+        self.assertIsNotNone(result)
+        
+        # Verify delete
+        result = self.shell.execute_sql("SELECT COUNT(*) as count FROM delta_test")
+        self.assertIn("2", result)
+        
+        # Cleanup
+        self.shell.execute_sql("DROP TABLE delta_test")
+        print("✓ Delta operations (CREATE/INSERT/UPDATE/DELETE) successful")
+    
+    def test_05_error_handling(self):
         """Test error handling with invalid and empty SQL."""
         # Invalid SQL
         with self.assertRaises(RuntimeError) as context:

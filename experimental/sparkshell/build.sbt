@@ -44,8 +44,19 @@ javaOptions ++= Seq(
 )
 
 libraryDependencies ++= Seq(
+  // Spark
   "org.apache.spark" %% "spark-sql" % "4.0.0",
+  
+  // Delta Lake
+  "io.delta" %% "delta-spark" % "4.0.0",
+  
+  // Unity Catalog
+  "io.unitycatalog" % "unitycatalog-spark_2.13" % "0.2.0",
+  
+  // REST API
   "com.sparkjava" % "spark-core" % "2.9.4",
   "com.google.code.gson" % "gson" % "2.10.1",
+  
+  // Testing
   "org.scalatest" %% "scalatest" % "3.2.17" % Test
 )

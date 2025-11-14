@@ -6,18 +6,48 @@ object SparkAppServer {
   private val DEFAULT_PORT = 8080
 
   def main(args: Array[String]): Unit = {
+    // Parse arguments: port [key1=value1 key2=value2 ...]
     val port = if (args.length > 0) args(0).toInt else DEFAULT_PORT
+    val sparkConfigs = if (args.length > 1) {
+      args.drop(1).map { arg =>
+        val parts = arg.split("=", 2)
+        if (parts.length == 2) Some((parts(0), parts(1))) else None
+      }.flatten.toMap
+    } else {
+      Map.empty[String, String]
+    }
 
-    // Initialize Spark Session
-    val spark = SparkSession.builder()
+    // Initialize Spark Session with Delta and Unity Catalog support
+    val builder = SparkSession.builder()
       .appName("SparkApp SQL REST Server")
       .master("local[*]")
       .config("spark.sql.warehouse.dir", "/tmp/spark-warehouse")
-      .getOrCreate()
+      // Delta Lake configurations
+      .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+      .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+      // Unity Catalog configuration (catalog type only, URI and token must be provided via spark_configs)
+      .config("spark.sql.catalog.unity", "io.unitycatalog.spark.UCSingleCatalog")
+    
+    // Apply custom Spark configurations
+    val builderWithConfigs = sparkConfigs.foldLeft(builder) { case (b, (key, value)) =>
+      println(s"Applying custom Spark config: $key = $value")
+      b.config(key, value)
+    }
+    
+    val spark = builderWithConfigs.getOrCreate()
 
     spark.sparkContext.setLogLevel("WARN")
 
     println(s"Spark Session initialized: ${spark.version}")
+    println("Delta Lake support enabled")
+    
+    // Check if Unity Catalog is configured
+    if (sparkConfigs.contains("spark.sql.catalog.unity.uri") && 
+        sparkConfigs.contains("spark.sql.catalog.unity.token")) {
+      println(s"Unity Catalog enabled: ${sparkConfigs("spark.sql.catalog.unity.uri")}")
+    } else {
+      println("Unity Catalog available (provide spark.sql.catalog.unity.uri and spark.sql.catalog.unity.token to enable)")
+    }
 
     // Eagerly initialize Spark internals to avoid lazy loading issues
     try {

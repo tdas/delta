@@ -17,6 +17,8 @@ This is an experimental project within the Delta Lake repository, isolated in th
 - **Language**: Scala 2.13.15
 - **Build Tool**: SBT 1.9.7 (self-contained in `build/` directory)
 - **Spark**: Apache Spark 4.0.0 (upgraded from 3.5.0)
+- **Delta Lake**: Delta Spark 4.0.0 (for Delta table support)
+- **Unity Catalog**: Unity Catalog Spark 0.2.0 (for UC table access)
 - **HTTP Framework**: Spark Java 2.9.4 (for REST endpoints)
 - **JSON**: Google Gson 2.10.1
 - **Testing**: ScalaTest 3.2.17, Python pytest
@@ -28,7 +30,7 @@ This is an experimental project within the Delta Lake repository, isolated in th
 
 1. **SparkAppServer** (`src/main/scala/com/sparkapp/SparkAppServer.scala`)
    - Entry point of the application
-   - Initializes Spark Session in local mode
+   - Initializes Spark Session in local mode with Delta and Unity Catalog extensions
    - Eagerly initializes Spark internals to avoid lazy loading issues
    - Manages server lifecycle
 
@@ -179,7 +181,7 @@ experimental/sparkshell/
 │       └── JsonSerializationSpec.scala   # JSON tests (5)
 │
 ├── tests/                            # Python tests
-│   ├── test_spark_shell.py           # Integration tests (6)
+│   ├── test_spark_shell.py           # Integration tests (7)
 │   └── __init__.py
 │
 ├── spark_shell.py                    # SparkShell class (automatic mgmt)
@@ -235,6 +237,18 @@ with SparkShell(source=".", port=8080) as shell:
     info = shell.get_server_info()  # {"sparkVersion": "4.0.0", ...}
 ```
 
+**Configuring Unity Catalog:**
+```python
+spark_configs = {
+    "spark.sql.catalog.unity.uri": "http://localhost:8081",
+    "spark.sql.catalog.unity.token": "your-uc-token"
+}
+
+with SparkShell(source=".", port=8080, spark_configs=spark_configs) as shell:
+    result = shell.execute_sql("SELECT * FROM unity.catalog.schema.table")
+    print(result)
+```
+
 ### REST API (For running servers)
 
 ```python
@@ -271,6 +285,43 @@ curl -X POST http://localhost:8080/sql \
 curl -X POST http://localhost:8080/sql \
   -H "Content-Type: application/json" \
   -d '{"sql": "SELECT * FROM users"}'
+```
+
+## Delta Lake Operations
+
+### Create Delta Table
+```bash
+curl -X POST http://localhost:8080/sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "CREATE TABLE delta_table (id INT, value STRING) USING DELTA"}'
+```
+
+### Update Delta Table
+```bash
+curl -X POST http://localhost:8080/sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "UPDATE delta_table SET value = \"new_value\" WHERE id = 1"}'
+```
+
+### Delete from Delta Table
+```bash
+curl -X POST http://localhost:8080/sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "DELETE FROM delta_table WHERE id > 10"}'
+```
+
+### Time Travel
+```bash
+curl -X POST http://localhost:8080/sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "SELECT * FROM delta_table VERSION AS OF 0"}'
+```
+
+### Describe History
+```bash
+curl -X POST http://localhost:8080/sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "DESCRIBE HISTORY delta_table"}'
 ```
 
 ## Configuration

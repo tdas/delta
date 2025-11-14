@@ -22,6 +22,14 @@ def main():
 
     # Use SparkShell with context manager (recommended)
     # It automatically handles setup, build, start, and cleanup
+    
+    # Optional: Pass custom Spark configurations
+    # spark_configs = {
+    #     "spark.executor.memory": "2g",
+    #     "spark.sql.shuffle.partitions": "10"
+    # }
+    # with SparkShell(source=".", port=8080, spark_configs=spark_configs) as shell:
+    
     with SparkShell(source=".", port=8080) as shell:
         print("✓ SparkApp server started!\n")
 

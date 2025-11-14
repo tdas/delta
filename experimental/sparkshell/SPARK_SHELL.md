@@ -36,6 +36,8 @@ with SparkShell(source="/path/to/sparkshell", port=8080) as shell:
 ✅ **Automatic build** (SBT assembly)  
 ✅ **Automatic startup** with health checks  
 ✅ **Simple API** - just `execute_sql()` and get results  
+✅ **Delta Lake support** - Create and query Delta tables  
+✅ **Unity Catalog support** - Access Unity Catalog tables  
 ✅ **Automatic cleanup** via context manager  
 ✅ **Error handling** - raises `RuntimeError` with clear messages  
 
@@ -52,7 +54,8 @@ SparkShell(
     auto_start: bool = True,        # Auto start server
     cleanup_on_exit: bool = True,   # Clean temp files on exit
     startup_timeout: int = 60,      # Startup timeout (seconds)
-    build_timeout: int = 300        # Build timeout (seconds)
+    build_timeout: int = 300,       # Build timeout (seconds)
+    spark_configs: Optional[dict] = None  # Spark configuration options
 )
 ```
 
@@ -137,6 +140,38 @@ with SparkShell(source=".") as shell:
     for sql in queries:
         result = shell.execute_sql(sql)
         print(f"{sql[:30]}... => {result[:50]}")
+```
+
+### Example 6: Custom Spark Configurations
+
+```python
+# Pass custom Spark configurations
+spark_configs = {
+    "spark.executor.memory": "2g",
+    "spark.driver.memory": "1g",
+    "spark.sql.shuffle.partitions": "10",
+    "spark.sql.adaptive.enabled": "true",
+    "spark.sql.warehouse.dir": "/custom/warehouse"
+}
+
+with SparkShell(source=".", port=8080, spark_configs=spark_configs) as shell:
+    result = shell.execute_sql("SELECT 1")
+    print(result)
+```
+
+### Example 7: Unity Catalog Configuration
+
+```python
+# Configure Unity Catalog connection
+spark_configs = {
+    "spark.sql.catalog.unity.uri": "http://localhost:8081",
+    "spark.sql.catalog.unity.token": "your-uc-token"
+}
+
+with SparkShell(source=".", port=8080, spark_configs=spark_configs) as shell:
+    # Query Unity Catalog tables
+    result = shell.execute_sql("SELECT * FROM unity.catalog.schema.table")
+    print(result)
 ```
 
 ## Source Specifications

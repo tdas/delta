@@ -8,6 +8,8 @@ A simple REST API server that executes Spark SQL commands and returns results as
 - Execute SQL commands via simple HTTP POST requests
 - Returns formatted query results or command execution status
 - Supports both queries (SELECT) and commands (CREATE, INSERT, etc.)
+- **Delta Lake support** - Create and query Delta tables
+- **Unity Catalog support** - Access Unity Catalog tables
 - Easy to use with curl, Postman, or any HTTP client
 
 ## Building the Application
@@ -166,6 +168,50 @@ If there's an error, you'll get:
 }
 ```
 
+### Delta Lake Examples
+
+#### Create a Delta Table
+```bash
+curl -X POST http://localhost:8080/sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "CREATE TABLE delta_users (id INT, name STRING, age INT) USING DELTA"}'
+```
+
+#### Insert into Delta Table
+```bash
+curl -X POST http://localhost:8080/sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "INSERT INTO delta_users VALUES (1, '\''Alice'\'', 30), (2, '\''Bob'\'', 25)"}'
+```
+
+#### Query Delta Table
+```bash
+curl -X POST http://localhost:8080/sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "SELECT * FROM delta_users"}'
+```
+
+#### Update Delta Table
+```bash
+curl -X POST http://localhost:8080/sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "UPDATE delta_users SET age = 31 WHERE name = '\''Alice'\''"}'
+```
+
+#### Delete from Delta Table
+```bash
+curl -X POST http://localhost:8080/sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "DELETE FROM delta_users WHERE age < 30"}'
+```
+
+#### Time Travel (Query Previous Version)
+```bash
+curl -X POST http://localhost:8080/sql \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "SELECT * FROM delta_users VERSION AS OF 0"}'
+```
+
 ## Python Client
 
 A Python client module is included for easy integration with Python applications.
@@ -225,7 +271,41 @@ response = requests.post(
 data = response.json()
 if data["success"]:
     print(data["result"])
-if success:
+```
+
+#### Passing Custom Spark Configurations
+
+```python
+from spark_shell import SparkShell
+
+# Configure Spark settings
+spark_configs = {
+    "spark.executor.memory": "2g",
+    "spark.driver.memory": "1g",
+    "spark.sql.shuffle.partitions": "10",
+    "spark.sql.adaptive.enabled": "true"
+}
+
+with SparkShell(source=".", port=8080, spark_configs=spark_configs) as shell:
+    result = shell.execute_sql("SELECT * FROM users")
+    print(result)
+```
+
+#### Configuring Unity Catalog
+
+Unity Catalog requires URI and token configuration through `spark_configs`:
+
+```python
+from spark_shell import SparkShell
+
+spark_configs = {
+    "spark.sql.catalog.unity.uri": "http://localhost:8081",
+    "spark.sql.catalog.unity.token": "your-uc-token"
+}
+
+with SparkShell(source=".", port=8080, spark_configs=spark_configs) as shell:
+    # Query Unity Catalog tables
+    result = shell.execute_sql("SELECT * FROM unity.catalog.schema.table")
     print(result)
 ```
 
@@ -249,7 +329,11 @@ These will demonstrate:
 
 ### SparkShell API Reference
 
-**SparkShell(source, port=8080, ...)**
+**SparkShell(source, port=8080, spark_configs=None, ...)**
+- `source`: Path to SparkApp code (local or GitHub URL)
+- `port`: Server port (default: 8080)
+- `spark_configs`: Dict of Spark configuration options (optional)
+  - Example: `{"spark.executor.memory": "2g", "spark.sql.shuffle.partitions": "10"}`
 - `execute_sql(sql: str) -> str`: Execute SQL and return result string (raises RuntimeError on failure)
 - `get_server_info() -> dict`: Get server information including Spark version
 - `server_info() -> dict`: Get server information including Spark version

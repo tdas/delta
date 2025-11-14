@@ -47,7 +47,8 @@ class SparkShell:
         auto_start: bool = True,
         cleanup_on_exit: bool = True,
         startup_timeout: int = 60,
-        build_timeout: int = 300
+        build_timeout: int = 300,
+        spark_configs: Optional[dict] = None
     ):
         """
         Initialize SparkShell.
@@ -61,6 +62,8 @@ class SparkShell:
             cleanup_on_exit: Clean up temp files on exit (default: True)
             startup_timeout: Server startup timeout in seconds (default: 60)
             build_timeout: Build timeout in seconds (default: 300)
+            spark_configs: Dict of Spark configuration options (default: None)
+                          Example: {"spark.executor.memory": "2g", "spark.sql.shuffle.partitions": "10"}
         """
         self.source = source
         self.port = port
@@ -70,6 +73,7 @@ class SparkShell:
         self.cleanup_on_exit = cleanup_on_exit
         self.startup_timeout = startup_timeout
         self.build_timeout = build_timeout
+        self.spark_configs = spark_configs or {}
         
         # Runtime state
         self.work_dir: Optional[Path] = None
@@ -280,9 +284,19 @@ class SparkShell:
         
         # Start the server process
         log_file = self.work_dir / "sparkapp.log"
+        
+        # Build command with port and optional Spark configs
+        cmd = ["java", "-jar", str(self.jar_path), str(self.port)]
+        
+        # Add Spark configurations as key=value arguments
+        if self.spark_configs:
+            for key, value in self.spark_configs.items():
+                cmd.append(f"{key}={value}")
+                print(f"[SparkShell] Setting Spark config: {key}={value}")
+        
         with open(log_file, "w") as log:
             self.process = subprocess.Popen(
-                ["java", "-jar", str(self.jar_path), str(self.port)],
+                cmd,
                 cwd=self.work_dir,
                 stdout=log,
                 stderr=subprocess.STDOUT,
