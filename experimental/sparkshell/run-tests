@@ -57,7 +57,7 @@ if ! command -v pytest &> /dev/null; then
     echo -e "${YELLOW}Warning: pytest not found. Trying to run tests directly...${NC}"
 
     # Run tests directly with Python
-    if python3 tests/test_sparkapp_client.py; then
+    if python3 tests/test_spark_shell.py; then
         echo ""
         echo -e "${GREEN}✓ Python tests PASSED${NC}"
         PYTHON_TESTS_PASSED=true
@@ -68,7 +68,7 @@ if ! command -v pytest &> /dev/null; then
     fi
 else
     # Run with pytest
-    if python3 -m pytest tests/test_sparkapp_client.py -v; then
+    if python3 -m pytest tests/test_spark_shell.py -v; then
         echo ""
         echo -e "${GREEN}✓ Python tests PASSED${NC}"
         PYTHON_TESTS_PASSED=true

@@ -181,13 +181,20 @@ pip install requests
 
 ### Usage
 
-#### Using the Client Class
+#### Using SparkShell (Recommended - Automatic Server Management)
 
 ```python
-from sparkapp_client import SparkAppClient
+from spark_shell import SparkShell
 
-# Create a client
-client = SparkAppClient(host="localhost", port=8080)
+# Automatically starts server, executes SQL, and cleans up
+with SparkShell(source=".", port=8080) as shell:
+    result = shell.execute_sql("SELECT * FROM users")
+    print(result)  # Just the output!
+```
+
+#### Using REST API Directly (Advanced)
+
+If you already have a running server, you can make direct HTTP requests:
 
 # Check server health
 health = client.health_check()
@@ -205,45 +212,46 @@ else:
     print(f"Error: {error}")
 ```
 
-#### Using the Convenience Function
+#### Using Python requests
 
 ```python
-from sparkapp_client import execute_sql
+import requests
 
-# Quick one-liner for SQL execution
-success, result, error = execute_sql("SELECT * FROM users")
+# Execute SQL
+response = requests.post(
+    "http://localhost:8080/sql",
+    json={"sql": "SELECT * FROM users"}
+)
+data = response.json()
+if data["success"]:
+    print(data["result"])
 if success:
     print(result)
 ```
 
 #### Running the Example Scripts
 
-The client includes comprehensive examples:
+The project includes comprehensive examples:
 
 ```bash
-# Start the server first
-bin/start.sh
-
-# Run the full example
-python sparkapp_client.py
-
-# Or run the simpler example
+# Run example with automatic server management
 python example.py
 ```
 
 These will demonstrate:
-- Health checking
+- Automatic server management
 - Creating tables
 - Inserting data
 - Querying data
 - Aggregations
 - Error handling
+- Context manager usage
 
-### Client API Reference
+### SparkShell API Reference
 
-**SparkAppClient(host="localhost", port=8080)**
-- `execute_sql(sql: str) -> (bool, str, str)`: Execute SQL and return (success, result, error)
-- `health_check() -> dict`: Get server health status
+**SparkShell(source, port=8080, ...)**
+- `execute_sql(sql: str) -> str`: Execute SQL and return result string (raises RuntimeError on failure)
+- `get_server_info() -> dict`: Get server information including Spark version
 - `server_info() -> dict`: Get server information including Spark version
 - `is_healthy() -> bool`: Check if server is healthy (returns True/False)
 
@@ -285,14 +293,11 @@ build/sbt "testOnly com.sparkapp.JsonSerializationSpec"
 # Install test dependencies first
 pip install -r requirements.txt
 
-# Start the server
-bin/start.sh
+# Run Python tests (automatically starts/stops server)
+python tests/test_spark_shell.py
 
-# Run Python tests
-python -m pytest tests/test_sparkapp_client.py -v
-
-# Or run directly
-python tests/test_sparkapp_client.py
+# Or with pytest
+python -m pytest tests/test_spark_shell.py -v
 ```
 
 ### Test Coverage
@@ -331,9 +336,9 @@ experimental/sparkshell/
 │   ├── SparkSqlExecutorSpec.scala
 │   └── JsonSerializationSpec.scala
 ├── tests/                    # Python tests
-│   ├── test_sparkapp_client.py
+│   ├── test_spark_shell.py   # Integration tests
 │   └── __init__.py
-├── sparkapp_client.py        # Python client library
+├── spark_shell.py            # SparkShell class (automatic server mgmt)
 ├── example.py                # Simple usage example
 ├── run-tests                 # Unified test runner
 ├── build.sbt                 # Build configuration
