@@ -1,8 +1,8 @@
-# SparkApp Project Context
+# SparkShell Project Context
 
 ## Overview
 
-**SparkApp** is a self-contained REST API server that executes Apache Spark SQL commands and returns results as JSON. It's designed to provide a simple HTTP interface to Spark SQL, making it easy to execute queries from any HTTP client or programming language.
+**SparkShell** is a self-contained REST API server that executes Apache Spark SQL commands and returns results as JSON. It's designed to provide a simple HTTP interface to Spark SQL, making it easy to execute queries from any HTTP client or programming language.
 
 ## Project Location
 
@@ -28,13 +28,13 @@ This is an experimental project within the Delta Lake repository, isolated in th
 
 ### Core Components
 
-1. **SparkAppServer** (`src/main/scala/com/sparkapp/SparkAppServer.scala`)
+1. **SparkShellServer** (`src/main/scala/com/sparkshell/SparkShellServer.scala`)
    - Entry point of the application
    - Initializes Spark Session in local mode with Delta and Unity Catalog extensions
    - Eagerly initializes Spark internals to avoid lazy loading issues
    - Manages server lifecycle
 
-2. **RestApi** (`src/main/scala/com/sparkapp/RestApi.scala`)
+2. **RestApi** (`src/main/scala/com/sparkshell/RestApi.scala`)
    - Implements REST endpoints using Spark Java framework
    - Handles HTTP requests and responses
    - Endpoints:
@@ -42,7 +42,7 @@ This is an experimental project within the Delta Lake repository, isolated in th
      - `GET /info` - Server information (Spark version, port, endpoints)
      - `POST /sql` - Execute SQL commands
 
-3. **SparkSqlExecutor** (`src/main/scala/com/sparkapp/SparkSqlExecutor.scala`)
+3. **SparkSqlExecutor** (`src/main/scala/com/sparkshell/SparkSqlExecutor.scala`)
    - Executes SQL commands using Spark Session
    - Formats query results as human-readable strings
    - Handles both queries (SELECT) and commands (CREATE, INSERT, DROP, etc.)
@@ -95,7 +95,7 @@ build/sbt test      # Run Scala tests
 build/sbt assembly  # Build fat JAR
 ```
 
-**Output**: `target/scala-2.13/sparkapp.jar` (self-contained executable)
+**Output**: `target/scala-2.13/sparkshell.jar` (self-contained executable)
 
 ### Running the Server
 
@@ -106,7 +106,7 @@ bin/start.sh [port]  # Default port: 8080
 
 **Foreground mode:**
 ```bash
-java -jar target/scala-2.13/sparkapp.jar [port]
+java -jar target/scala-2.13/sparkshell.jar [port]
 ```
 
 **Management scripts:**
@@ -119,8 +119,8 @@ java -jar target/scala-2.13/sparkapp.jar [port]
 ### Runtime Files
 
 When running:
-- `sparkapp.pid` - Process ID file
-- `sparkapp.log` - Server logs
+- `sparkshell.pid` - Process ID file
+- `sparkshell.log` - Server logs
 - `spark-warehouse/` - Spark data warehouse
 - `metastore_db/` - Derby metastore
 
@@ -171,12 +171,12 @@ experimental/sparkshell/
 │   └── sbt-config/                   # SBT config
 │
 ├── src/
-│   ├── main/scala/com/sparkapp/
+│   ├── main/scala/com/sparkshell/
 │   │   ├── RestApi.scala             # REST endpoints
-│   │   ├── SparkAppServer.scala      # Main server
+│   │   ├── SparkShellServer.scala    # Main server
 │   │   └── SparkSqlExecutor.scala    # SQL execution
 │   │
-│   └── test/scala/com/sparkapp/
+│   └── test/scala/com/sparkshell/
 │       ├── SparkSqlExecutorSpec.scala    # SQL tests (9)
 │       └── JsonSerializationSpec.scala   # JSON tests (5)
 │
@@ -332,14 +332,14 @@ Default port: 8080
 
 Change via:
 - Command line: `bin/start.sh 3000`
-- Direct JAR: `java -jar target/scala-2.13/sparkapp.jar 3000`
+- Direct JAR: `java -jar target/scala-2.13/sparkshell.jar 3000`
 
 ### Spark Configuration
 
-In `SparkAppServer.scala`:
+In `SparkShellServer.scala`:
 ```scala
 val spark = SparkSession.builder()
-  .appName("SparkApp SQL REST Server")
+  .appName("SparkShell SQL REST Server")
   .master("local[*]")  // Local mode with all cores
   .config("spark.sql.warehouse.dir", "/tmp/spark-warehouse")
   .getOrCreate()
@@ -461,7 +461,7 @@ bin/start.sh
 bin/status.sh
 
 # View logs
-tail -f sparkapp.log
+tail -f sparkshell.log
 
 # Run tests
 ./run-tests
@@ -475,8 +475,8 @@ curl http://localhost:8080/health
 
 ## Contact Points in Code
 
-- **Main entry**: `src/main/scala/com/sparkapp/SparkAppServer.scala:8`
-- **REST endpoints**: `src/main/scala/com/sparkapp/RestApi.scala:23-85`
-- **SQL execution**: `src/main/scala/com/sparkapp/SparkSqlExecutor.scala:7`
+- **Main entry**: `src/main/scala/com/sparkshell/SparkShellServer.scala:8`
+- **REST endpoints**: `src/main/scala/com/sparkshell/RestApi.scala:23-85`
+- **SQL execution**: `src/main/scala/com/sparkshell/SparkSqlExecutor.scala:7`
 - **Build config**: `build.sbt:1`
 - **Python client**: `spark_shell.py:30` (SparkShell class)

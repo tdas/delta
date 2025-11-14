@@ -1,4 +1,4 @@
-# SparkApp - Spark SQL REST Server
+# SparkShell - Spark SQL REST Server
 
 A simple REST API server that executes Spark SQL commands and returns results as JSON.
 
@@ -70,12 +70,12 @@ bin/status.sh
 
 **View logs:**
 ```bash
-tail -f sparkapp.log
+tail -f sparkshell.log
 ```
 
 The background scripts will:
-- Save the process PID to `sparkapp.pid`
-- Write all logs to `sparkapp.log`
+- Save the process PID to `sparkshell.pid`
+- Write all logs to `sparkshell.log`
 - Handle graceful shutdown with fallback to force kill if needed
 - Detect and clean up stale PID files
 
@@ -90,7 +90,7 @@ Response:
 ```json
 {
   "status": "ok",
-  "message": "SparkApp server is running"
+  "message": "SparkShell server is running"
 }
 ```
 
@@ -244,7 +244,7 @@ If you already have a running server, you can make direct HTTP requests:
 
 # Check server health
 health = client.health_check()
-print(health)  # {"status": "ok", "message": "SparkApp server is running"}
+print(health)  # {"status": "ok", "message": "SparkShell server is running"}
 
 # Get server info
 info = client.server_info()

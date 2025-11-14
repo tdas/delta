@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# SparkApp Server Start Script (using assembly JAR)
+# SparkShell Server Start Script (using assembly JAR)
 
 # Get the project root directory (parent of bin/)
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-PID_FILE="$PROJECT_DIR/sparkapp.pid"
-LOG_FILE="$PROJECT_DIR/sparkapp.log"
-JAR_FILE="$PROJECT_DIR/target/scala-2.13/sparkapp.jar"
+PID_FILE="$PROJECT_DIR/sparkshell.pid"
+LOG_FILE="$PROJECT_DIR/sparkshell.log"
+JAR_FILE="$PROJECT_DIR/target/scala-2.13/sparkshell.jar"
 PORT="${1:-8080}"
 
 # Check if JAR exists
@@ -22,7 +22,7 @@ fi
 if [ -f "$PID_FILE" ]; then
     PID=$(cat "$PID_FILE")
     if ps -p "$PID" > /dev/null 2>&1; then
-        echo "SparkApp server is already running with PID $PID"
+        echo "SparkShell server is already running with PID $PID"
         exit 1
     else
         echo "Removing stale PID file..."
@@ -30,7 +30,7 @@ if [ -f "$PID_FILE" ]; then
     fi
 fi
 
-echo "Starting SparkApp server on port $PORT..."
+echo "Starting SparkShell server on port $PORT..."
 echo "Logs will be written to: $LOG_FILE"
 
 # Start the server in the background with the assembly JAR
@@ -61,11 +61,11 @@ echo $SERVER_PID > "$PID_FILE"
 sleep 5
 
 if ps -p $SERVER_PID > /dev/null 2>&1; then
-    echo "SparkApp server started successfully with PID $SERVER_PID"
+    echo "SparkShell server started successfully with PID $SERVER_PID"
     echo "Use 'bin/stop.sh' to stop the server"
     echo "Use 'tail -f $LOG_FILE' to view logs"
 else
-    echo "Failed to start SparkApp server. Check $LOG_FILE for errors"
+    echo "Failed to start SparkShell server. Check $LOG_FILE for errors"
     rm -f "$PID_FILE"
     exit 1
 fi

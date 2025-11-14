@@ -2,7 +2,7 @@
 
 ## Overview
 
-**SparkShell** is a Python class that automatically downloads, builds, starts, and manages SparkApp servers. Use it to execute Spark SQL from any machine without manual setup.
+**SparkShell** is a Python class that automatically downloads, builds, starts, and manages SparkShell servers. Use it to execute Spark SQL from any machine without manual setup.
 
 ## Quick Start
 
@@ -248,7 +248,7 @@ SparkShell(source=".", startup_timeout=120)  # 2 minutes
 shell = SparkShell(source=".", cleanup_on_exit=False)
 # ... use shell ...
 print(f"Temp dir: {shell.work_dir}")
-print(f"Logs: {shell.work_dir}/sparkapp.log")
+print(f"Logs: {shell.work_dir}/sparkshell.log")
 ```
 
 ## Command-Line Usage

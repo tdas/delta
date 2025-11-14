@@ -1,13 +1,13 @@
-name := "SparkApp"
+name := "SparkShell"
 
 version := "0.1.0"
 
 scalaVersion := "2.13.15"
 
 // Main class for easy running
-Compile / mainClass := Some("com.sparkapp.SparkAppServer")
-assembly / mainClass := Some("com.sparkapp.SparkAppServer")
-assembly / assemblyJarName := "sparkapp.jar"
+Compile / mainClass := Some("com.sparkshell.SparkShellServer")
+assembly / mainClass := Some("com.sparkshell.SparkShellServer")
+assembly / assemblyJarName := "sparkshell.jar"
 
 // Assembly merge strategy
 assembly / assemblyMergeStrategy := {
@@ -51,7 +51,7 @@ libraryDependencies ++= Seq(
   "io.delta" %% "delta-spark" % "4.0.0",
   
   // Unity Catalog
-  "io.unitycatalog" % "unitycatalog-spark_2.13" % "0.2.0",
+  "io.unitycatalog" % "unitycatalog-spark_2.13" % "0.3.0",
   
   // REST API
   "com.sparkjava" % "spark-core" % "2.9.4",

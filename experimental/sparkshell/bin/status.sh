@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# SparkApp Server Status Script
+# SparkShell Server Status Script
 
 # Get the project root directory (parent of bin/)
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-PID_FILE="$PROJECT_DIR/sparkapp.pid"
-LOG_FILE="$PROJECT_DIR/sparkapp.log"
+PID_FILE="$PROJECT_DIR/sparkshell.pid"
+LOG_FILE="$PROJECT_DIR/sparkshell.log"
 
 echo "=========================================="
-echo "SparkApp Server Status"
+echo "SparkShell Server Status"
 echo "=========================================="
 
 # Check if PID file exists

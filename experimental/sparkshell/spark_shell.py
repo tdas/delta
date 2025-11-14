@@ -259,7 +259,7 @@ class SparkShell:
                 raise RuntimeError(f"Build failed: {result.stderr}")
             
             # Find the JAR file
-            jar_path = self.work_dir / "target" / "scala-2.13" / "sparkapp.jar"
+            jar_path = self.work_dir / "target" / "scala-2.13" / "sparkshell.jar"
             if not jar_path.exists():
                 raise FileNotFoundError(f"Assembly JAR not found at: {jar_path}")
             
@@ -283,7 +283,7 @@ class SparkShell:
             raise RuntimeError(f"Port {self.port} is already in use")
         
         # Start the server process
-        log_file = self.work_dir / "sparkapp.log"
+        log_file = self.work_dir / "sparkshell.log"
         
         # Build command with port and optional Spark configs
         cmd = ["java", "-jar", str(self.jar_path), str(self.port)]
