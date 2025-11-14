@@ -1,0 +1,30 @@
+# SBT
+target/
+project/target/
+project/project/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.bsp/
+
+# Logs and runtime files
+*.log
+*.pid
+sparkapp.log
+sparkapp.pid
+
+# Python generated files (for testing)
+*.pyc
+__pycache__/
+*_pb2.py
+*_pb2_grpc.py
+
+# Spark
+metastore_db/
+derby.log
+spark-warehouse/
+
+# OS
+.DS_Store
