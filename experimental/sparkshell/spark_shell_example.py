@@ -41,7 +41,6 @@ def main():
         op_config = OpConfig(
             verbose=not args.quiet,
             cleanup_on_exit=not args.no_cleanup,
-            auto_build=True,
             auto_start=True,
             startup_timeout=60,
             build_timeout=300

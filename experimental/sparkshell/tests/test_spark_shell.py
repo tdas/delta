@@ -43,10 +43,7 @@ class TestSparkShell(unittest.TestCase):
         # Use a unique port to avoid conflicts
         cls.shell = SparkShell(
             source=sparkshell_dir,
-            port=8090,
-            auto_build=True,
-            auto_start=True,
-            cleanup_on_exit=True
+            port=8090
         )
         
         # Start it manually (not using context manager since we want it for all tests)
@@ -221,28 +218,25 @@ class TestSparkShellManualControl(unittest.TestCase):
         test_dir = os.path.dirname(os.path.abspath(__file__))
         sparkshell_dir = os.path.dirname(test_dir)
         
+        op_config = OpConfig(auto_start=False, cleanup_on_exit=False)
         shell = SparkShell(
             source=sparkshell_dir,
             port=8092,
-            auto_build=False,
-            auto_start=False,
-            cleanup_on_exit=False
+            op_config=op_config
         )
-        
+
         try:
-            # Test setup and build
-            shell.setup()
-            self.assertIsNotNone(shell.work_dir)
-            shell.build()
-            self.assertIsNotNone(shell.jar_path)
-            print("✓ Manual setup/build successful")
-            
-            # Test start and SQL execution
+            # Test manual start (setup and build happen automatically)
             shell.start()
+            self.assertIsNotNone(shell.work_dir)
+            self.assertIsNotNone(shell.jar_path)
+            print("✓ Manual start successful (auto setup/build)")
+            
+            # Test SQL execution
             self.assertTrue(shell.is_ready)
             result = shell.execute_sql("SELECT 1 as val")
             self.assertIn("val", result)
-            print("✓ Manual start/SQL successful")
+            print("✓ Manual SQL execution successful")
             
         finally:
             shell.shutdown()
@@ -257,7 +251,6 @@ class TestConfigurationClasses(unittest.TestCase):
         """Test OpConfig dataclass."""
         op_config = OpConfig(
             verbose=False,
-            auto_build=True,
             auto_start=False,
             cleanup_on_exit=True,
             startup_timeout=120,
@@ -265,7 +258,6 @@ class TestConfigurationClasses(unittest.TestCase):
         )
 
         self.assertFalse(op_config.verbose)
-        self.assertTrue(op_config.auto_build)
         self.assertFalse(op_config.auto_start)
         self.assertTrue(op_config.cleanup_on_exit)
         self.assertEqual(op_config.startup_timeout, 120)
@@ -307,7 +299,7 @@ class TestConfigurationClasses(unittest.TestCase):
         test_dir = os.path.dirname(os.path.abspath(__file__))
         sparkshell_dir = os.path.dirname(test_dir)
 
-        op_config = OpConfig(verbose=False, auto_build=False, auto_start=False)
+        op_config = OpConfig(verbose=False, auto_start=False)
         spark_config = SparkConfig(configs={"spark.sql.shuffle.partitions": "10"})
         uc_config = UCConfig(uri="http://localhost:8081", token="test-token")
 
@@ -321,7 +313,6 @@ class TestConfigurationClasses(unittest.TestCase):
 
         # Verify configs were applied
         self.assertFalse(shell.op_config.verbose)
-        self.assertFalse(shell.op_config.auto_build)
         self.assertEqual(shell.spark_config.configs["spark.sql.shuffle.partitions"], "10")
         self.assertEqual(shell.uc_config.uri, "http://localhost:8081")
         self.assertEqual(shell.uc_config.token, "test-token")
@@ -340,7 +331,6 @@ class TestConfigurationClasses(unittest.TestCase):
 
         # Verify default configs were created
         self.assertTrue(shell.op_config.verbose)  # Default is True
-        self.assertTrue(shell.op_config.auto_build)  # Default is True
         self.assertTrue(shell.op_config.auto_start)  # Default is True
         self.assertTrue(shell.op_config.cleanup_on_exit)  # Default is True
         self.assertEqual(shell.op_config.startup_timeout, 60)  # Default

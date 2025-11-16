@@ -2,13 +2,22 @@
 """
 SparkShell - Standalone Python class to download, build, start, and interact with SparkApp server.
 
+The SparkShell automatically handles all setup, downloading, and building when you call start().
+You only need to provide the source location and call start() - everything else is automatic!
+
 Usage:
-    # Basic usage with defaults
+    # Basic usage with context manager (automatic setup, build, and start)
     from spark_shell import SparkShell
 
     with SparkShell(source=".") as shell:
         result = shell.execute_sql("SELECT 1 as id")
         print(result)
+
+    # Manual start (still automatic setup and build)
+    shell = SparkShell(source=".")
+    shell.start()
+    result = shell.execute_sql("SELECT 1 as id")
+    shell.shutdown()
 
     # With configuration classes
     from spark_shell import SparkShell, UCConfig, OpConfig, SparkConfig
@@ -48,7 +57,6 @@ class UCConfig:
 class OpConfig:
     """Operational configuration for SparkShell lifecycle."""
     verbose: bool = True
-    auto_build: bool = True
     auto_start: bool = True
     cleanup_on_exit: bool = True
     startup_timeout: int = 60
@@ -158,10 +166,7 @@ class SparkShell:
             )
 
     def __enter__(self):
-        """Context manager entry - setup and start server."""
-        self.setup()
-        if self.op_config.auto_build:
-            self.build()
+        """Context manager entry - start server (setup and build happen automatically)."""
         if self.op_config.auto_start:
             self.start()
         return self
@@ -314,10 +319,15 @@ class SparkShell:
             raise RuntimeError(f"Build failed: {str(e)}")
     
     def start(self):
-        """Start the SparkApp server."""
+        """Start the SparkApp server (automatically handles setup and build if needed)."""
+        # Automatically setup if not already done
+        if not self.work_dir:
+            self.setup()
+
+        # Automatically build if not already done
         if not self.jar_path or not self.jar_path.exists():
-            raise RuntimeError("Assembly JAR not found. Run build() first.")
-        
+            self.build()
+
         print(f"[SparkShell] Starting server on port {self.port}...")
         
         # Check if port is already in use
