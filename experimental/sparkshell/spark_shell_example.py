@@ -3,14 +3,17 @@
 SparkShell Example - Demonstrates usage of SparkShell class.
 
 Usage:
-    python spark_shell_example.py <source> [--port PORT] [--no-cleanup] [--sql SQL]
+    python spark_shell_example.py <source> [--port PORT] [--no-cleanup] [--sql SQL] [--quiet]
 
 Examples:
-    # Run with local directory
+    # Run with local directory (verbose by default)
     python spark_shell_example.py . --port 8080
 
     # Run with custom SQL
     python spark_shell_example.py . --sql "SELECT 1 as id, 'Alice' as name"
+
+    # Run in quiet mode (no verbose output)
+    python spark_shell_example.py . --quiet
 
     # Run from GitHub (if downloading from repo)
     python spark_shell_example.py https://github.com/user/repo/tree/main/path/to/sparkshell
@@ -28,6 +31,7 @@ def main():
     parser.add_argument("--port", type=int, default=8080, help="Server port (default: 8080)")
     parser.add_argument("--no-cleanup", action="store_true", help="Don't cleanup temp files")
     parser.add_argument("--sql", help="SQL command to execute")
+    parser.add_argument("--quiet", action="store_true", help="Disable verbose output (default: verbose)")
 
     args = parser.parse_args()
 
@@ -36,7 +40,8 @@ def main():
         with SparkShell(
             source=args.source,
             port=args.port,
-            cleanup_on_exit=not args.no_cleanup
+            cleanup_on_exit=not args.no_cleanup,
+            verbose=not args.quiet
         ) as shell:
             # Get server info
             info = shell.get_server_info()

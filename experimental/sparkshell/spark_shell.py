@@ -52,11 +52,12 @@ class SparkShell:
         uc_uri: Optional[str] = None,
         uc_token: Optional[str] = None,
         uc_catalog: Optional[str] = None,
-        uc_schema: Optional[str] = None
+        uc_schema: Optional[str] = None,
+        verbose: bool = True
     ):
         """
         Initialize SparkShell.
-        
+
         Args:
             source: GitHub URL or local directory path containing SparkApp code
             port: Port for the server (default: 8080)
@@ -72,6 +73,7 @@ class SparkShell:
             uc_token: Unity Catalog authentication token (default: None)
             uc_catalog: Unity Catalog catalog name (default: None, uses "unity" if not specified)
             uc_schema: Unity Catalog schema name (default: None)
+            verbose: Print all command output (default: True)
         """
         self.source = source
         self.port = port
@@ -86,6 +88,7 @@ class SparkShell:
         self.uc_token = uc_token
         self.uc_catalog = uc_catalog or "unity"  # Default to "unity" if not specified
         self.uc_schema = uc_schema
+        self.verbose = verbose
         
         # Configure Unity Catalog if URI and token are provided
         if self.uc_uri and self.uc_token:
@@ -105,6 +108,44 @@ class SparkShell:
         # API base URL
         self.base_url = f"http://localhost:{self.port}"
     
+    def _run_command(self, cmd, cwd=None, timeout=None, check=True):
+        """
+        Run a command with optional verbose output.
+
+        Args:
+            cmd: Command and arguments as list
+            cwd: Working directory
+            timeout: Timeout in seconds
+            check: Raise exception on non-zero exit code
+
+        Returns:
+            subprocess.CompletedProcess
+        """
+        if self.verbose:
+            print(f"[SparkShell] Running: {' '.join(cmd)}")
+
+        if self.verbose:
+            # Stream output in real-time
+            result = subprocess.run(
+                cmd,
+                cwd=cwd,
+                timeout=timeout,
+                text=True
+            )
+            if check and result.returncode != 0:
+                raise subprocess.CalledProcessError(result.returncode, cmd)
+            return result
+        else:
+            # Capture output silently
+            return subprocess.run(
+                cmd,
+                cwd=cwd,
+                timeout=timeout,
+                check=check,
+                capture_output=True,
+                text=True
+            )
+
     def __enter__(self):
         """Context manager entry - setup and start server."""
         self.setup()
@@ -171,40 +212,20 @@ class SparkShell:
             # Clone with sparse checkout
             try:
                 # Initialize git repo
-                subprocess.run(
-                    ["git", "init"],
-                    cwd=self.work_dir,
-                    check=True,
-                    capture_output=True
-                )
-                
+                self._run_command(["git", "init"], cwd=self.work_dir)
+
                 # Add remote
-                subprocess.run(
-                    ["git", "remote", "add", "origin", repo_url],
-                    cwd=self.work_dir,
-                    check=True,
-                    capture_output=True
-                )
-                
+                self._run_command(["git", "remote", "add", "origin", repo_url], cwd=self.work_dir)
+
                 # Enable sparse checkout
-                subprocess.run(
-                    ["git", "config", "core.sparseCheckout", "true"],
-                    cwd=self.work_dir,
-                    check=True,
-                    capture_output=True
-                )
-                
+                self._run_command(["git", "config", "core.sparseCheckout", "true"], cwd=self.work_dir)
+
                 # Specify path to checkout
                 sparse_checkout_file = self.work_dir / ".git" / "info" / "sparse-checkout"
                 sparse_checkout_file.write_text(f"{subdir}\n")
-                
+
                 # Pull the specific branch
-                subprocess.run(
-                    ["git", "pull", "origin", branch, "--depth=1"],
-                    cwd=self.work_dir,
-                    check=True,
-                    capture_output=True
-                )
+                self._run_command(["git", "pull", "origin", branch, "--depth=1"], cwd=self.work_dir)
                 
                 # Move files from subdir to root if needed
                 if subdir:
@@ -221,14 +242,10 @@ class SparkShell:
         else:
             # Full repo clone
             try:
-                subprocess.run(
-                    ["git", "clone", "--depth=1", self.source, str(self.work_dir)],
-                    check=True,
-                    capture_output=True
-                )
+                self._run_command(["git", "clone", "--depth=1", self.source, str(self.work_dir)])
                 print("[SparkShell] Clone complete")
             except subprocess.CalledProcessError as e:
-                raise RuntimeError(f"Failed to clone from GitHub: {e.stderr.decode() if e.stderr else str(e)}")
+                raise RuntimeError(f"Failed to clone from GitHub: {str(e)}")
     
     def _copy_from_local(self):
         """Copy SparkApp code from local directory."""
@@ -265,32 +282,25 @@ class SparkShell:
         
         try:
             # Run sbt assembly
-            result = subprocess.run(
+            result = self._run_command(
                 [str(sbt_script), "assembly"],
                 cwd=self.work_dir,
                 timeout=self.build_timeout,
-                capture_output=True,
-                text=True
+                check=True
             )
-            
-            if result.returncode != 0:
-                print(f"[SparkShell] Build failed with exit code {result.returncode}")
-                print(f"[SparkShell] STDOUT: {result.stdout}")
-                print(f"[SparkShell] STDERR: {result.stderr}")
-                raise RuntimeError(f"Build failed: {result.stderr}")
-            
+
             # Find the JAR file
             jar_path = self.work_dir / "target" / "scala-2.13" / "sparkshell.jar"
             if not jar_path.exists():
                 raise FileNotFoundError(f"Assembly JAR not found at: {jar_path}")
-            
+
             self.jar_path = jar_path
             print(f"[SparkShell] Build complete: {self.jar_path}")
-            
+
         except subprocess.TimeoutExpired:
             raise RuntimeError(f"Build timeout after {self.build_timeout} seconds")
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Build failed: {e.stderr if e.stderr else str(e)}")
+            raise RuntimeError(f"Build failed: {str(e)}")
     
     def start(self):
         """Start the SparkApp server."""
@@ -308,34 +318,73 @@ class SparkShell:
         
         # Build command with port and optional Spark configs
         cmd = ["java", "-jar", str(self.jar_path), str(self.port)]
-        
+
         # Add Spark configurations as key=value arguments
         if self.spark_configs:
             for key, value in self.spark_configs.items():
                 cmd.append(f"{key}={value}")
                 print(f"[SparkShell] Setting Spark config: {key}={value}")
-        
+
+        if self.verbose:
+            print(f"[SparkShell] Running: {' '.join(cmd)}")
+
+        # Always write to log file for diagnostics, but also show in verbose mode
         with open(log_file, "w") as log:
-            self.process = subprocess.Popen(
-                cmd,
-                cwd=self.work_dir,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                preexec_fn=os.setsid if sys.platform != "win32" else None
-            )
-        
+            if self.verbose:
+                # In verbose mode, use Popen to read output continuously
+                self.process = subprocess.Popen(
+                    cmd,
+                    cwd=self.work_dir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    preexec_fn=os.setsid if sys.platform != "win32" else None
+                )
+            else:
+                # In quiet mode, redirect to log file only
+                self.process = subprocess.Popen(
+                    cmd,
+                    cwd=self.work_dir,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    preexec_fn=os.setsid if sys.platform != "win32" else None
+                )
+
         # Wait for server to be ready
         print("[SparkShell] Waiting for server to start...")
         start_time = time.time()
+
         while time.time() - start_time < self.startup_timeout:
+            # In verbose mode, read and display output from the process
+            if self.verbose and self.process.stdout:
+                try:
+                    import select
+                    # Use select to check if there's data to read (non-blocking)
+                    if sys.platform != "win32":
+                        ready, _, _ = select.select([self.process.stdout], [], [], 0.1)
+                        if ready:
+                            line = self.process.stdout.readline()
+                            if line:
+                                print(line, end='')
+                                # Also write to log file
+                                with open(log_file, "a") as log:
+                                    log.write(line)
+                    else:
+                        # Windows doesn't support select on pipes, use readline with timeout
+                        # This is a simplified approach for Windows
+                        pass
+                except:
+                    pass
+
             if self._check_health():
                 self.is_ready = True
                 print(f"[SparkShell] Server ready at {self.base_url}")
-                
+
                 # Set Unity Catalog schema if configured (catalog is already set via defaultCatalog config)
                 if self.uc_uri and self.uc_token:
                     print(f"[SparkShell] Unity Catalog enabled: {self.uc_catalog}")
-                    
+
                     if self.uc_schema:
                         try:
                             print(f"[SparkShell] Setting default schema: {self.uc_schema}")
@@ -346,17 +395,17 @@ class SparkShell:
                             print(f"[SparkShell] Tables can be referenced as: {self.uc_catalog}.{self.uc_schema}.table_name")
                     else:
                         print(f"[SparkShell] Tables must be referenced as: {self.uc_catalog}.schema.table_name")
-                
+
                 return
-            
+
             # Check if process died
             if self.process.poll() is not None:
                 with open(log_file) as f:
                     log_contents = f.read()
                 raise RuntimeError(f"Server process died. Log:\n{log_contents}")
-            
+
             time.sleep(1)
-        
+
         raise RuntimeError(f"Server failed to start within {self.startup_timeout} seconds")
     
     def _is_port_in_use(self) -> bool:
