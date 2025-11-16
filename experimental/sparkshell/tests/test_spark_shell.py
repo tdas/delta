@@ -198,8 +198,9 @@ class TestSparkShellContextManager(unittest.TestCase):
         """Test SparkShell with context manager (with statement)."""
         test_dir = os.path.dirname(os.path.abspath(__file__))
         sparkshell_dir = os.path.dirname(test_dir)
-        
-        with SparkShell(source=sparkshell_dir, port=8091, cleanup_on_exit=True) as shell:
+
+        op_config = OpConfig(cleanup_on_exit=True)
+        with SparkShell(source=sparkshell_dir, port=8091, op_config=op_config) as shell:
             # Test SQL execution
             result = shell.execute_sql("SELECT 1 as test_value")
             self.assertIsNotNone(result)

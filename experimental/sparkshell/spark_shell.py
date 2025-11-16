@@ -5,6 +5,10 @@ SparkShell - Standalone Python class to download, build, start, and interact wit
 The SparkShell automatically handles all setup, downloading, and building when you call start().
 You only need to provide the source location and call start() - everything else is automatic!
 
+Features:
+- Automatic caching: Builds are cached in ~/.sparkshell_cache for faster subsequent startups
+- Force refresh: Use start(force_refresh=True) to bypass cache and force fresh build
+
 Usage:
     # Basic usage with context manager (automatic setup, build, and start)
     from spark_shell import SparkShell
@@ -15,7 +19,13 @@ Usage:
 
     # Manual start (still automatic setup and build)
     shell = SparkShell(source=".")
-    shell.start()
+    shell.start()  # Uses cached build if available
+    result = shell.execute_sql("SELECT 1 as id")
+    shell.shutdown()
+
+    # Force fresh build (bypass cache)
+    shell = SparkShell(source=".")
+    shell.start(force_refresh=True)  # Forces fresh download and rebuild
     result = shell.execute_sql("SELECT 1 as id")
     shell.shutdown()
 
@@ -39,6 +49,7 @@ import tempfile
 import subprocess
 import json
 import requests
+import hashlib
 from pathlib import Path
 from typing import Optional, Union, Tuple
 from dataclasses import dataclass, field
@@ -126,7 +137,66 @@ class SparkShell:
 
         # API base URL
         self.base_url = f"http://localhost:{self.port}"
-    
+
+    def _get_source_hash(self) -> str:
+        """
+        Compute a hash of the source to use as cache key.
+        For local paths, hash the absolute path.
+        For URLs, hash the URL itself.
+        """
+        source_str = str(Path(self.source).resolve()) if not self.source.startswith("http") else self.source
+        return hashlib.sha256(source_str.encode()).hexdigest()[:16]
+
+    def _get_cache_dir(self) -> Path:
+        """Get the cache directory for this source."""
+        cache_base = Path.home() / ".sparkshell_cache"
+        cache_base.mkdir(parents=True, exist_ok=True)
+        return cache_base / self._get_source_hash()
+
+    def _has_cached_build(self) -> bool:
+        """Check if a cached build exists for this source."""
+        cache_dir = self._get_cache_dir()
+        jar_path = cache_dir / "target" / "scala-2.13" / "sparkshell.jar"
+        return jar_path.exists()
+
+    def _use_cached_build(self):
+        """Use the cached build instead of building from scratch."""
+        cache_dir = self._get_cache_dir()
+        print(f"[SparkShell] Using cached build from: {cache_dir}")
+
+        # Set work_dir to cache directory
+        self.work_dir = cache_dir
+
+        # Set jar_path
+        self.jar_path = cache_dir / "target" / "scala-2.13" / "sparkshell.jar"
+
+        if not self.jar_path.exists():
+            raise RuntimeError(f"Cached JAR not found at: {self.jar_path}")
+
+        print(f"[SparkShell] Using cached JAR: {self.jar_path}")
+
+    def _cache_build(self):
+        """Cache the current build for future reuse."""
+        if not self.work_dir or not self.jar_path:
+            return
+
+        cache_dir = self._get_cache_dir()
+
+        # If we're already using the cache directory, no need to copy
+        if self.work_dir == cache_dir:
+            return
+
+        print(f"[SparkShell] Caching build to: {cache_dir}")
+
+        # Remove old cache if it exists
+        if cache_dir.exists():
+            shutil.rmtree(cache_dir)
+
+        # Copy entire work directory to cache
+        shutil.copytree(self.work_dir, cache_dir)
+
+        print(f"[SparkShell] Build cached successfully")
+
     def _run_command(self, cmd, cwd=None, timeout=None, check=True):
         """
         Run a command with optional verbose output.
@@ -178,34 +248,47 @@ class SparkShell:
             self.cleanup()
         return False
     
-    def setup(self):
-        """Download or copy SparkApp code to temp directory."""
+    def setup(self, force_refresh: bool = False):
+        """
+        Download or copy SparkApp code to temp directory.
+
+        Args:
+            force_refresh: If True, bypass cache and download/copy fresh source
+        """
         print(f"[SparkShell] Setting up from source: {self.source}")
-        
-        # Create temp directory
+
+        # Create temp directory (but we might switch to cache later)
         if self.temp_dir:
             self.work_dir = Path(self.temp_dir)
             self.work_dir.mkdir(parents=True, exist_ok=True)
         else:
-            self.work_dir = Path(tempfile.mkdtemp(prefix="sparkshell_"))
-        
+            # If using cache, use cache directory; otherwise use temp
+            if not force_refresh and self._has_cached_build():
+                self.work_dir = self._get_cache_dir()
+            else:
+                self.work_dir = Path(tempfile.mkdtemp(prefix="sparkshell_"))
+
         print(f"[SparkShell] Working directory: {self.work_dir}")
-        
-        # Determine if source is GitHub URL or local path
-        if self.source.startswith("http://") or self.source.startswith("https://"):
-            self._download_from_github()
+
+        # If using cached build, skip download/copy
+        if not force_refresh and self._has_cached_build() and self.work_dir == self._get_cache_dir():
+            print("[SparkShell] Using existing cached source")
         else:
-            self._copy_from_local()
-        
-        # Verify required files exist
-        required_files = ["build.sbt", "build/sbt"]
-        for file in required_files:
-            if not (self.work_dir / file).exists():
-                raise FileNotFoundError(
-                    f"Required file not found: {file}. "
-                    f"Ensure source contains a valid SparkApp project."
-                )
-        
+            # Determine if source is GitHub URL or local path
+            if self.source.startswith("http://") or self.source.startswith("https://"):
+                self._download_from_github()
+            else:
+                self._copy_from_local()
+
+            # Verify required files exist
+            required_files = ["build.sbt", "build/sbt"]
+            for file in required_files:
+                if not (self.work_dir / file).exists():
+                    raise FileNotFoundError(
+                        f"Required file not found: {file}. "
+                        f"Ensure source contains a valid SparkApp project."
+                    )
+
         print("[SparkShell] Setup complete")
     
     def _download_from_github(self):
@@ -284,18 +367,28 @@ class SparkShell:
         
         print("[SparkShell] Copy complete")
     
-    def build(self):
-        """Build the assembly JAR using SBT."""
+    def build(self, force_refresh: bool = False):
+        """
+        Build the assembly JAR using SBT.
+
+        Args:
+            force_refresh: If True, force rebuild even if cached build exists
+        """
+        # Check if we can use cached build
+        if not force_refresh and self._has_cached_build():
+            self._use_cached_build()
+            return
+
         print("[SparkShell] Building assembly JAR...")
         print("[SparkShell] This may take several minutes on first run...")
-        
+
         sbt_script = self.work_dir / "build" / "sbt"
         if not sbt_script.exists():
             raise FileNotFoundError(f"SBT script not found: {sbt_script}")
-        
+
         # Make sbt executable
         os.chmod(sbt_script, 0o755)
-        
+
         try:
             # Run sbt assembly
             result = self._run_command(
@@ -313,20 +406,28 @@ class SparkShell:
             self.jar_path = jar_path
             print(f"[SparkShell] Build complete: {self.jar_path}")
 
+            # Cache the build for future reuse
+            self._cache_build()
+
         except subprocess.TimeoutExpired:
             raise RuntimeError(f"Build timeout after {self.op_config.build_timeout} seconds")
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Build failed: {str(e)}")
     
-    def start(self):
-        """Start the SparkApp server (automatically handles setup and build if needed)."""
+    def start(self, force_refresh: bool = False):
+        """
+        Start the SparkApp server (automatically handles setup and build if needed).
+
+        Args:
+            force_refresh: If True, force fresh download and rebuild, bypassing cache (default: False)
+        """
         # Automatically setup if not already done
         if not self.work_dir:
-            self.setup()
+            self.setup(force_refresh=force_refresh)
 
         # Automatically build if not already done
         if not self.jar_path or not self.jar_path.exists():
-            self.build()
+            self.build(force_refresh=force_refresh)
 
         print(f"[SparkShell] Starting server on port {self.port}...")
         
