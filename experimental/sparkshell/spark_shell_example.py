@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SparkShell Example - Demonstrates usage of SparkShell class.
+SparkShell Example - Demonstrates usage of SparkShell class with configuration classes.
 
 Usage:
     python spark_shell_example.py <source> [--port PORT] [--no-cleanup] [--sql SQL] [--quiet]
@@ -21,7 +21,7 @@ Examples:
 
 import sys
 import argparse
-from spark_shell import SparkShell
+from spark_shell import SparkShell, UCConfig, OpConfig, SparkConfig
 
 
 def main():
@@ -37,11 +37,31 @@ def main():
 
     # Example usage
     try:
+        # Create configuration objects
+        op_config = OpConfig(
+            verbose=not args.quiet,
+            cleanup_on_exit=not args.no_cleanup,
+            auto_build=True,
+            auto_start=True,
+            startup_timeout=60,
+            build_timeout=300
+        )
+
+        spark_config = SparkConfig(
+            configs={
+                "spark.sql.shuffle.partitions": "10",
+                "spark.sql.adaptive.enabled": "true"
+            }
+        )
+
+        # Note: UCConfig would be configured if we had UC credentials
+        # uc_config = UCConfig(uri="http://localhost:8081", token="my-token")
+
         with SparkShell(
             source=args.source,
             port=args.port,
-            cleanup_on_exit=not args.no_cleanup,
-            verbose=not args.quiet
+            op_config=op_config,
+            spark_config=spark_config
         ) as shell:
             # Get server info
             info = shell.get_server_info()

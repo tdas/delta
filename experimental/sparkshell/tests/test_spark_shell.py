@@ -6,6 +6,11 @@ Integration tests for SparkShell class.
 These tests will automatically start a SparkApp server using SparkShell,
 run tests against it, and clean up automatically.
 
+Tests include:
+- Configuration classes (UCConfig, OpConfig, SparkConfig)
+- SparkShell initialization with config classes
+- Default configuration values
+
 Run with: python -m pytest tests/test_spark_shell.py -v
 Or: python tests/test_spark_shell.py
 """
@@ -17,7 +22,7 @@ import os
 # Add parent directory to path to import spark_shell
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from spark_shell import SparkShell
+from spark_shell import SparkShell, UCConfig, OpConfig, SparkConfig
 
 
 class TestSparkShell(unittest.TestCase):
@@ -245,6 +250,105 @@ class TestSparkShellManualControl(unittest.TestCase):
             print("✓ Manual cleanup successful")
 
 
+class TestConfigurationClasses(unittest.TestCase):
+    """Test configuration classes (UCConfig, OpConfig, SparkConfig)."""
+
+    def test_op_config(self):
+        """Test OpConfig dataclass."""
+        op_config = OpConfig(
+            verbose=False,
+            auto_build=True,
+            auto_start=False,
+            cleanup_on_exit=True,
+            startup_timeout=120,
+            build_timeout=600
+        )
+
+        self.assertFalse(op_config.verbose)
+        self.assertTrue(op_config.auto_build)
+        self.assertFalse(op_config.auto_start)
+        self.assertTrue(op_config.cleanup_on_exit)
+        self.assertEqual(op_config.startup_timeout, 120)
+        self.assertEqual(op_config.build_timeout, 600)
+        print("✓ OpConfig works correctly")
+
+    def test_uc_config(self):
+        """Test UCConfig dataclass."""
+        uc_config = UCConfig(
+            uri="http://localhost:8081",
+            token="test-token",
+            catalog="my_catalog",
+            schema="my_schema"
+        )
+
+        self.assertEqual(uc_config.uri, "http://localhost:8081")
+        self.assertEqual(uc_config.token, "test-token")
+        self.assertEqual(uc_config.catalog, "my_catalog")
+        self.assertEqual(uc_config.schema, "my_schema")
+        print("✓ UCConfig works correctly")
+
+    def test_spark_config(self):
+        """Test SparkConfig dataclass."""
+        spark_config = SparkConfig(
+            configs={
+                "spark.executor.memory": "2g",
+                "spark.driver.memory": "1g",
+                "spark.sql.shuffle.partitions": "10"
+            }
+        )
+
+        self.assertEqual(spark_config.configs["spark.executor.memory"], "2g")
+        self.assertEqual(spark_config.configs["spark.driver.memory"], "1g")
+        self.assertEqual(spark_config.configs["spark.sql.shuffle.partitions"], "10")
+        print("✓ SparkConfig works correctly")
+
+    def test_sparkshell_with_config_classes(self):
+        """Test SparkShell initialization with configuration classes."""
+        test_dir = os.path.dirname(os.path.abspath(__file__))
+        sparkshell_dir = os.path.dirname(test_dir)
+
+        op_config = OpConfig(verbose=False, auto_build=False, auto_start=False)
+        spark_config = SparkConfig(configs={"spark.sql.shuffle.partitions": "10"})
+        uc_config = UCConfig(uri="http://localhost:8081", token="test-token")
+
+        shell = SparkShell(
+            source=sparkshell_dir,
+            port=8093,
+            op_config=op_config,
+            spark_config=spark_config,
+            uc_config=uc_config
+        )
+
+        # Verify configs were applied
+        self.assertFalse(shell.op_config.verbose)
+        self.assertFalse(shell.op_config.auto_build)
+        self.assertEqual(shell.spark_config.configs["spark.sql.shuffle.partitions"], "10")
+        self.assertEqual(shell.uc_config.uri, "http://localhost:8081")
+        self.assertEqual(shell.uc_config.token, "test-token")
+        print("✓ SparkShell with config classes works correctly")
+
+    def test_default_configs(self):
+        """Test SparkShell with default configuration objects."""
+        test_dir = os.path.dirname(os.path.abspath(__file__))
+        sparkshell_dir = os.path.dirname(test_dir)
+
+        # No config objects provided - should use defaults
+        shell = SparkShell(
+            source=sparkshell_dir,
+            port=8094
+        )
+
+        # Verify default configs were created
+        self.assertTrue(shell.op_config.verbose)  # Default is True
+        self.assertTrue(shell.op_config.auto_build)  # Default is True
+        self.assertTrue(shell.op_config.auto_start)  # Default is True
+        self.assertTrue(shell.op_config.cleanup_on_exit)  # Default is True
+        self.assertEqual(shell.op_config.startup_timeout, 60)  # Default
+        self.assertEqual(shell.op_config.build_timeout, 300)  # Default
+        self.assertEqual(shell.uc_config.catalog, "unity")  # Default
+        print("✓ Default configs work correctly")
+
+
 if __name__ == "__main__":
     # Run tests with verbose output
     print("\n" + "="*70)
@@ -253,6 +357,6 @@ if __name__ == "__main__":
     print("This will build and start SparkShell, run tests, and cleanup.")
     print("First run may take 3-6 minutes due to SBT build.")
     print("="*70 + "\n")
-    
+
     unittest.main(verbosity=2)
 

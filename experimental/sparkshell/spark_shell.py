@@ -3,14 +3,22 @@
 SparkShell - Standalone Python class to download, build, start, and interact with SparkApp server.
 
 Usage:
-    # From GitHub
-    with SparkShell(source="https://github.com/user/repo/path/to/sparkshell") as shell:
+    # Basic usage with defaults
+    from spark_shell import SparkShell
+
+    with SparkShell(source=".") as shell:
         result = shell.execute_sql("SELECT 1 as id")
         print(result)
-    
-    # From local directory
-    with SparkShell(source="/path/to/local/sparkshell", port=8080) as shell:
-        result = shell.execute_sql("CREATE TABLE test (id INT)")
+
+    # With configuration classes
+    from spark_shell import SparkShell, UCConfig, OpConfig, SparkConfig
+
+    uc_config = UCConfig(uri="http://localhost:8081", token="my-token", catalog="unity", schema="default")
+    op_config = OpConfig(verbose=True, startup_timeout=120, cleanup_on_exit=True)
+    spark_config = SparkConfig(configs={"spark.executor.memory": "2g"})
+
+    with SparkShell(source=".", uc_config=uc_config, op_config=op_config, spark_config=spark_config) as shell:
+        result = shell.execute_sql("SELECT * FROM my_table")
         print(result)
 """
 
@@ -24,6 +32,33 @@ import json
 import requests
 from pathlib import Path
 from typing import Optional, Union, Tuple
+from dataclasses import dataclass, field
+
+
+@dataclass
+class UCConfig:
+    """Unity Catalog configuration."""
+    uri: Optional[str] = None
+    token: Optional[str] = None
+    catalog: str = "unity"
+    schema: Optional[str] = None
+
+
+@dataclass
+class OpConfig:
+    """Operational configuration for SparkShell lifecycle."""
+    verbose: bool = True
+    auto_build: bool = True
+    auto_start: bool = True
+    cleanup_on_exit: bool = True
+    startup_timeout: int = 60
+    build_timeout: int = 300
+
+
+@dataclass
+class SparkConfig:
+    """Spark configuration settings."""
+    configs: dict = field(default_factory=dict)
 
 
 class SparkShell:
@@ -43,17 +78,9 @@ class SparkShell:
         source: str,
         port: int = 8080,
         temp_dir: Optional[str] = None,
-        auto_build: bool = True,
-        auto_start: bool = True,
-        cleanup_on_exit: bool = True,
-        startup_timeout: int = 60,
-        build_timeout: int = 300,
-        spark_configs: Optional[dict] = None,
-        uc_uri: Optional[str] = None,
-        uc_token: Optional[str] = None,
-        uc_catalog: Optional[str] = None,
-        uc_schema: Optional[str] = None,
-        verbose: bool = True
+        uc_config: Optional[UCConfig] = None,
+        op_config: Optional[OpConfig] = None,
+        spark_config: Optional[SparkConfig] = None
     ):
         """
         Initialize SparkShell.
@@ -62,49 +89,33 @@ class SparkShell:
             source: GitHub URL or local directory path containing SparkApp code
             port: Port for the server (default: 8080)
             temp_dir: Custom temp directory (default: system temp)
-            auto_build: Automatically build assembly JAR (default: True)
-            auto_start: Automatically start server (default: True)
-            cleanup_on_exit: Clean up temp files on exit (default: True)
-            startup_timeout: Server startup timeout in seconds (default: 60)
-            build_timeout: Build timeout in seconds (default: 300)
-            spark_configs: Dict of Spark configuration options (default: None)
-                          Example: {"spark.executor.memory": "2g", "spark.sql.shuffle.partitions": "10"}
-            uc_uri: Unity Catalog server URI (default: None)
-            uc_token: Unity Catalog authentication token (default: None)
-            uc_catalog: Unity Catalog catalog name (default: None, uses "unity" if not specified)
-            uc_schema: Unity Catalog schema name (default: None)
-            verbose: Print all command output (default: True)
+            uc_config: Unity Catalog configuration (UCConfig object)
+            op_config: Operational configuration (OpConfig object)
+            spark_config: Spark configuration (SparkConfig object)
         """
         self.source = source
         self.port = port
         self.temp_dir = temp_dir
-        self.auto_build = auto_build
-        self.auto_start = auto_start
-        self.cleanup_on_exit = cleanup_on_exit
-        self.startup_timeout = startup_timeout
-        self.build_timeout = build_timeout
-        self.spark_configs = spark_configs or {}
-        self.uc_uri = uc_uri
-        self.uc_token = uc_token
-        self.uc_catalog = uc_catalog or "unity"  # Default to "unity" if not specified
-        self.uc_schema = uc_schema
-        self.verbose = verbose
-        
+
+        # Initialize configurations with defaults or provided config objects
+        self.op_config = op_config or OpConfig()
+        self.spark_config = spark_config or SparkConfig()
+        self.uc_config = uc_config or UCConfig()
+
         # Configure Unity Catalog if URI and token are provided
-        if self.uc_uri and self.uc_token:
+        if self.uc_config.uri and self.uc_config.token:
             # Register the catalog type
-            self.spark_configs[f"spark.sql.catalog.{self.uc_catalog}"] = "io.unitycatalog.spark.UCSingleCatalog"
-            self.spark_configs[f"spark.sql.catalog.{self.uc_catalog}.uri"] = self.uc_uri
-            self.spark_configs[f"spark.sql.catalog.{self.uc_catalog}.token"] = self.uc_token
-            self.spark_configs["spark.sql.defaultCatalog"] = self.uc_catalog
-            # self.spark_configs[f"spark.sql.catalog.{self.uc_catalog}.warehouse"] = f"/tmp/{self.uc_catalog}-warehouse"
-        
+            self.spark_config.configs[f"spark.sql.catalog.{self.uc_config.catalog}"] = "io.unitycatalog.spark.UCSingleCatalog"
+            self.spark_config.configs[f"spark.sql.catalog.{self.uc_config.catalog}.uri"] = self.uc_config.uri
+            self.spark_config.configs[f"spark.sql.catalog.{self.uc_config.catalog}.token"] = self.uc_config.token
+            self.spark_config.configs["spark.sql.defaultCatalog"] = self.uc_config.catalog
+
         # Runtime state
         self.work_dir: Optional[Path] = None
         self.process: Optional[subprocess.Popen] = None
         self.jar_path: Optional[Path] = None
         self.is_ready = False
-        
+
         # API base URL
         self.base_url = f"http://localhost:{self.port}"
     
@@ -121,10 +132,10 @@ class SparkShell:
         Returns:
             subprocess.CompletedProcess
         """
-        if self.verbose:
+        if self.op_config.verbose:
             print(f"[SparkShell] Running: {' '.join(cmd)}")
 
-        if self.verbose:
+        if self.op_config.verbose:
             # Stream output in real-time
             result = subprocess.run(
                 cmd,
@@ -149,16 +160,16 @@ class SparkShell:
     def __enter__(self):
         """Context manager entry - setup and start server."""
         self.setup()
-        if self.auto_build:
+        if self.op_config.auto_build:
             self.build()
-        if self.auto_start:
+        if self.op_config.auto_start:
             self.start()
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - cleanup."""
         self.shutdown()
-        if self.cleanup_on_exit:
+        if self.op_config.cleanup_on_exit:
             self.cleanup()
         return False
     
@@ -285,7 +296,7 @@ class SparkShell:
             result = self._run_command(
                 [str(sbt_script), "assembly"],
                 cwd=self.work_dir,
-                timeout=self.build_timeout,
+                timeout=self.op_config.build_timeout,
                 check=True
             )
 
@@ -298,7 +309,7 @@ class SparkShell:
             print(f"[SparkShell] Build complete: {self.jar_path}")
 
         except subprocess.TimeoutExpired:
-            raise RuntimeError(f"Build timeout after {self.build_timeout} seconds")
+            raise RuntimeError(f"Build timeout after {self.op_config.build_timeout} seconds")
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Build failed: {str(e)}")
     
@@ -320,17 +331,17 @@ class SparkShell:
         cmd = ["java", "-jar", str(self.jar_path), str(self.port)]
 
         # Add Spark configurations as key=value arguments
-        if self.spark_configs:
-            for key, value in self.spark_configs.items():
+        if self.spark_config.configs:
+            for key, value in self.spark_config.configs.items():
                 cmd.append(f"{key}={value}")
                 print(f"[SparkShell] Setting Spark config: {key}={value}")
 
-        if self.verbose:
+        if self.op_config.verbose:
             print(f"[SparkShell] Running: {' '.join(cmd)}")
 
         # Always write to log file for diagnostics, but also show in verbose mode
         with open(log_file, "w") as log:
-            if self.verbose:
+            if self.op_config.verbose:
                 # In verbose mode, use Popen to read output continuously
                 self.process = subprocess.Popen(
                     cmd,
@@ -355,9 +366,9 @@ class SparkShell:
         print("[SparkShell] Waiting for server to start...")
         start_time = time.time()
 
-        while time.time() - start_time < self.startup_timeout:
+        while time.time() - start_time < self.op_config.startup_timeout:
             # In verbose mode, read and display output from the process
-            if self.verbose and self.process.stdout:
+            if self.op_config.verbose and self.process.stdout:
                 try:
                     import select
                     # Use select to check if there's data to read (non-blocking)
@@ -382,19 +393,19 @@ class SparkShell:
                 print(f"[SparkShell] Server ready at {self.base_url}")
 
                 # Set Unity Catalog schema if configured (catalog is already set via defaultCatalog config)
-                if self.uc_uri and self.uc_token:
-                    print(f"[SparkShell] Unity Catalog enabled: {self.uc_catalog}")
+                if self.uc_config.uri and self.uc_config.token:
+                    print(f"[SparkShell] Unity Catalog enabled: {self.uc_config.catalog}")
 
-                    if self.uc_schema:
+                    if self.uc_config.schema:
                         try:
-                            print(f"[SparkShell] Setting default schema: {self.uc_schema}")
-                            self.execute_sql(f"USE {self.uc_schema}")
-                            print(f"[SparkShell] Tables can be referenced as: {self.uc_catalog}.{self.uc_schema}.table_name or table_name")
+                            print(f"[SparkShell] Setting default schema: {self.uc_config.schema}")
+                            self.execute_sql(f"USE {self.uc_config.schema}")
+                            print(f"[SparkShell] Tables can be referenced as: {self.uc_config.catalog}.{self.uc_config.schema}.table_name or table_name")
                         except RuntimeError as e:
                             print(f"[SparkShell] Warning: Failed to set schema: {e}")
-                            print(f"[SparkShell] Tables can be referenced as: {self.uc_catalog}.{self.uc_schema}.table_name")
+                            print(f"[SparkShell] Tables can be referenced as: {self.uc_config.catalog}.{self.uc_config.schema}.table_name")
                     else:
-                        print(f"[SparkShell] Tables must be referenced as: {self.uc_catalog}.schema.table_name")
+                        print(f"[SparkShell] Tables must be referenced as: {self.uc_config.catalog}.schema.table_name")
 
                 return
 
@@ -406,7 +417,7 @@ class SparkShell:
 
             time.sleep(1)
 
-        raise RuntimeError(f"Server failed to start within {self.startup_timeout} seconds")
+        raise RuntimeError(f"Server failed to start within {self.op_config.startup_timeout} seconds")
     
     def _is_port_in_use(self) -> bool:
         """Check if the port is already in use."""
