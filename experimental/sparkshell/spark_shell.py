@@ -172,10 +172,11 @@ class SparkShell:
         jar_path = cache_dir / "target" / "scala-2.13" / "sparkshell.jar"
         has_cache = jar_path.exists()
 
-        print(f"[SparkShell] Cache status:")
-        print(f"  Cache directory: {cache_dir}")
-        print(f"  Expected JAR: {jar_path}")
-        print(f"  Cache exists: {'Yes' if has_cache else 'No'}")
+        if self.op_config.verbose:
+            print(f"[SparkShell] Cache status:")
+            print(f"  Cache directory: {cache_dir}")
+            print(f"  Expected JAR: {jar_path}")
+            print(f"  Cache exists: {'Yes' if has_cache else 'No'}")
 
         return has_cache
 
@@ -420,19 +421,23 @@ class SparkShell:
             force_refresh: If True, force rebuild even if cached build exists
         """
         # Check if we can use cached build
-        print(f"[SparkShell] Build decision:")
-        print(f"  Force refresh: {force_refresh}")
+        if self.op_config.verbose:
+            print(f"[SparkShell] Build decision:")
+            print(f"  Force refresh: {force_refresh}")
 
         if not force_refresh and self._has_cached_build():
-            print(f"[SparkShell] Decision: Using cached build (cache exists and no force refresh)")
+            if self.op_config.verbose:
+                print(f"[SparkShell] Decision: Using cached build (cache exists and no force refresh)")
             self._use_cached_build()
             # Ensure .sbtopts is present in the cached work_dir
             self._ensure_sbtopts()
+            print("[SparkShell] Build complete (using cache)")
             return
-        elif force_refresh:
-            print(f"[SparkShell] Decision: Building from scratch (force refresh requested)")
-        else:
-            print(f"[SparkShell] Decision: Building from scratch (no cache available)")
+        elif self.op_config.verbose:
+            if force_refresh:
+                print(f"[SparkShell] Decision: Building from scratch (force refresh requested)")
+            else:
+                print(f"[SparkShell] Decision: Building from scratch (no cache available)")
 
         # Ensure .sbtopts is present in work_dir before building
         self._ensure_sbtopts()
@@ -724,7 +729,8 @@ class SparkShell:
 
         # Never delete the cache directory
         if self.work_dir == cache_dir:
-            print(f"[SparkShell] Skipping cleanup: work_dir is cache directory")
+            if self.op_config.verbose:
+                print(f"[SparkShell] Skipping cleanup: work_dir is cache directory")
             return
 
         print(f"[SparkShell] Cleaning up: {self.work_dir}")
