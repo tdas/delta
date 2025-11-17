@@ -54,6 +54,16 @@ from pathlib import Path
 from typing import Optional, Union, Tuple
 from dataclasses import dataclass, field
 
+# Module directory - determined at import time to work in all environments
+try:
+    # Normal Python script execution
+    _MODULE_DIR = Path(__file__).parent.resolve()
+except NameError:
+    # Interactive environments (notebooks, REPL) where __file__ is not defined
+    # Try to find the module via sys.modules
+    import inspect
+    _MODULE_DIR = Path(inspect.getfile(inspect.currentframe())).parent.resolve() if inspect.getfile(inspect.currentframe()) else Path.cwd()
+
 
 @dataclass
 class UCConfig:
@@ -291,8 +301,7 @@ class SparkShell:
 
             # Always copy .sbtopts from SparkShell project's build/ directory to work_dir
             # This ensures consistent SBT memory settings regardless of source
-            sparkshell_dir = Path(__file__).parent
-            sbtopts_src = sparkshell_dir / "build" / ".sbtopts"
+            sbtopts_src = _MODULE_DIR / "build" / ".sbtopts"
             sbtopts_dest = self.work_dir / ".sbtopts"
             if sbtopts_src.exists():
                 shutil.copy2(sbtopts_src, sbtopts_dest)
