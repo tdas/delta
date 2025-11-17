@@ -716,14 +716,23 @@ class SparkShell:
             self.is_ready = False
     
     def cleanup(self):
-        """Clean up temporary files."""
-        if self.work_dir and self.work_dir.exists():
-            print(f"[SparkShell] Cleaning up: {self.work_dir}")
-            try:
-                shutil.rmtree(self.work_dir)
-                print("[SparkShell] Cleanup complete")
-            except Exception as e:
-                print(f"[SparkShell] Error during cleanup: {e}")
+        """Clean up temporary files (but never delete the cache)."""
+        if not self.work_dir or not self.work_dir.exists():
+            return
+
+        cache_dir = self._get_cache_dir()
+
+        # Never delete the cache directory
+        if self.work_dir == cache_dir:
+            print(f"[SparkShell] Skipping cleanup: work_dir is cache directory")
+            return
+
+        print(f"[SparkShell] Cleaning up: {self.work_dir}")
+        try:
+            shutil.rmtree(self.work_dir)
+            print("[SparkShell] Cleanup complete")
+        except Exception as e:
+            print(f"[SparkShell] Error during cleanup: {e}")
     
     def __del__(self):
         """Destructor - ensure cleanup."""
