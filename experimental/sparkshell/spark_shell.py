@@ -145,19 +145,39 @@ class SparkShell:
         For URLs, hash the URL itself.
         """
         source_str = str(Path(self.source).resolve()) if not self.source.startswith("http") else self.source
-        return hashlib.sha256(source_str.encode()).hexdigest()[:16]
+        source_hash = hashlib.sha256(source_str.encode()).hexdigest()[:16]
+
+        if self.op_config.verbose:
+            print(f"[SparkShell] Cache key computation:")
+            print(f"  Source: {self.source}")
+            print(f"  Normalized: {source_str}")
+            print(f"  Cache key (hash): {source_hash}")
+
+        return source_hash
 
     def _get_cache_dir(self) -> Path:
         """Get the cache directory for this source."""
         cache_base = Path.home() / ".sparkshell_cache"
         cache_base.mkdir(parents=True, exist_ok=True)
-        return cache_base / self._get_source_hash()
+        cache_dir = cache_base / self._get_source_hash()
+
+        if self.op_config.verbose:
+            print(f"[SparkShell] Cache directory: {cache_dir}")
+
+        return cache_dir
 
     def _has_cached_build(self) -> bool:
         """Check if a cached build exists for this source."""
         cache_dir = self._get_cache_dir()
         jar_path = cache_dir / "target" / "scala-2.13" / "sparkshell.jar"
-        return jar_path.exists()
+        has_cache = jar_path.exists()
+
+        print(f"[SparkShell] Cache status:")
+        print(f"  Cache directory: {cache_dir}")
+        print(f"  Expected JAR: {jar_path}")
+        print(f"  Cache exists: {'Yes' if has_cache else 'No'}")
+
+        return has_cache
 
     def _use_cached_build(self):
         """Use the cached build instead of building from scratch."""
@@ -400,11 +420,19 @@ class SparkShell:
             force_refresh: If True, force rebuild even if cached build exists
         """
         # Check if we can use cached build
+        print(f"[SparkShell] Build decision:")
+        print(f"  Force refresh: {force_refresh}")
+
         if not force_refresh and self._has_cached_build():
+            print(f"[SparkShell] Decision: Using cached build (cache exists and no force refresh)")
             self._use_cached_build()
             # Ensure .sbtopts is present in the cached work_dir
             self._ensure_sbtopts()
             return
+        elif force_refresh:
+            print(f"[SparkShell] Decision: Building from scratch (force refresh requested)")
+        else:
+            print(f"[SparkShell] Decision: Building from scratch (no cache available)")
 
         # Ensure .sbtopts is present in work_dir before building
         self._ensure_sbtopts()
@@ -579,19 +607,19 @@ class SparkShell:
     def execute_sql(self, sql: str) -> str:
         """
         Execute SQL command and return only the result output.
-        
+
         Args:
             sql: SQL command to execute
-            
+
         Returns:
             str: Query result as formatted string
-            
+
         Raises:
             RuntimeError: If server is not ready or SQL execution fails
         """
         if not self.is_ready:
             raise RuntimeError("Server is not ready. Call start() first.")
-        
+
         try:
             response = requests.post(
                 f"{self.base_url}/sql",
@@ -599,20 +627,55 @@ class SparkShell:
                 json={"sql": sql},
                 timeout=300  # 5 minutes timeout for long queries
             )
-            
+
             if response.status_code != 200:
+                self._print_spark_logs_on_error()
                 raise RuntimeError(f"HTTP error {response.status_code}: {response.text}")
-            
+
             data = response.json()
-            
+
             if not data.get("success", False):
                 error_msg = data.get("error", "Unknown error")
+                self._print_spark_logs_on_error()
                 raise RuntimeError(f"SQL execution failed: {error_msg}")
-            
+
             return data.get("result", "")
-            
+
         except requests.exceptions.RequestException as e:
+            self._print_spark_logs_on_error()
             raise RuntimeError(f"Failed to execute SQL: {str(e)}")
+
+    def _print_spark_logs_on_error(self, num_lines: int = 50):
+        """
+        Print the last N lines from the Spark log file when an error occurs.
+
+        Args:
+            num_lines: Number of lines to show from the end of the log file
+        """
+        if not self.work_dir:
+            return
+
+        log_file = self.work_dir / "sparkshell.log"
+
+        if not log_file.exists():
+            print("[SparkShell] Log file not found")
+            return
+
+        try:
+            with open(log_file, 'r') as f:
+                lines = f.readlines()
+
+            # Get the last N lines
+            tail_lines = lines[-num_lines:] if len(lines) > num_lines else lines
+
+            print("\n" + "="*70)
+            print(f"[SparkShell] Last {len(tail_lines)} lines from Spark logs:")
+            print("="*70)
+            for line in tail_lines:
+                print(line, end='')
+            print("="*70 + "\n")
+        except Exception as e:
+            print(f"[SparkShell] Failed to read log file: {e}")
     
     def get_server_info(self) -> dict:
         """Get server information."""
