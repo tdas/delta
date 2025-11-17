@@ -18,9 +18,33 @@ Or: python tests/test_spark_shell.py
 import unittest
 import sys
 import os
+import shutil
+import tempfile
+import atexit
 
-# Add parent directory to path to import spark_shell
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Create a temporary directory and copy only spark_shell.py to it
+# This ensures spark_shell.py is truly standalone with no dependencies on other repo files
+_test_dir = os.path.dirname(os.path.abspath(__file__))
+_sparkshell_dir = os.path.dirname(_test_dir)
+_temp_dir = tempfile.mkdtemp(prefix="sparkshell_standalone_test_")
+_spark_shell_src = os.path.join(_sparkshell_dir, "spark_shell.py")
+_spark_shell_dest = os.path.join(_temp_dir, "spark_shell.py")
+
+# Copy spark_shell.py to temp directory
+shutil.copy2(_spark_shell_src, _spark_shell_dest)
+print(f"[TEST SETUP] Copied spark_shell.py to temporary directory: {_temp_dir}")
+print(f"[TEST SETUP] This ensures spark_shell.py is standalone with no repo dependencies")
+
+# Add temp directory to path to import the standalone spark_shell
+sys.path.insert(0, _temp_dir)
+
+# Clean up temp directory on exit
+def _cleanup_temp_dir():
+    if os.path.exists(_temp_dir):
+        shutil.rmtree(_temp_dir)
+        print(f"\n[TEST CLEANUP] Removed temporary test directory: {_temp_dir}")
+
+atexit.register(_cleanup_temp_dir)
 
 from spark_shell import SparkShell, UCConfig, OpConfig, SparkConfig
 
@@ -347,12 +371,6 @@ class TestSbtoptsPlacement(unittest.TestCase):
         """Test that .sbtopts is placed correctly for both fresh and cached builds."""
         test_dir = os.path.dirname(os.path.abspath(__file__))
         sparkshell_dir = os.path.dirname(test_dir)
-
-        # First verify source .sbtopts exists
-        sbtopts_source = os.path.join(sparkshell_dir, "build", ".sbtopts")
-        self.assertTrue(os.path.exists(sbtopts_source),
-                       f"Source .sbtopts should exist at {sbtopts_source}")
-        print("✓ Source .sbtopts file exists")
 
         # Test fresh build - create a build that will be cached
         shell1 = SparkShell(

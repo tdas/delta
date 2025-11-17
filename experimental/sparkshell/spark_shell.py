@@ -54,16 +54,6 @@ from pathlib import Path
 from typing import Optional, Union, Tuple
 from dataclasses import dataclass, field
 
-# Module directory - determined at import time to work in all environments
-try:
-    # Normal Python script execution
-    _MODULE_DIR = Path(__file__).parent.resolve()
-except NameError:
-    # Interactive environments (notebooks, REPL) where __file__ is not defined
-    # Try to find the module via sys.modules
-    import inspect
-    _MODULE_DIR = Path(inspect.getfile(inspect.currentframe())).parent.resolve() if inspect.getfile(inspect.currentframe()) else Path.cwd()
-
 
 @dataclass
 class UCConfig:
@@ -189,19 +179,26 @@ class SparkShell:
         """
         Ensure .sbtopts file is present in work_dir.
         This must be called after work_dir is finalized (after cache decision).
+        Writes embedded .sbtopts content directly to make spark_shell.py standalone.
         """
         if not self.work_dir:
             raise RuntimeError("work_dir must be set before calling _ensure_sbtopts")
 
-        sbtopts_src = _MODULE_DIR / "build" / ".sbtopts"
         sbtopts_dest = self.work_dir / ".sbtopts"
 
-        if sbtopts_src.exists():
-            shutil.copy2(sbtopts_src, sbtopts_dest)
-            if self.op_config.verbose:
-                print(f"[SparkShell] Copied .sbtopts to {sbtopts_dest}")
-        else:
-            print(f"[SparkShell] Warning: {sbtopts_src} not found, SBT will use default memory settings")
+        # Embedded .sbtopts content - SBT JVM memory settings
+        sbtopts_content = """-J-Xmx2G
+-J-Xms1G
+-J-XX:+UseG1GC
+-J-XX:MaxMetaspaceSize=1G
+"""
+
+        # Write .sbtopts file
+        with open(sbtopts_dest, 'w') as f:
+            f.write(sbtopts_content)
+
+        if self.op_config.verbose:
+            print(f"[SparkShell] Created .sbtopts at {sbtopts_dest}")
 
     def _cache_build(self):
         """Cache the current build for future reuse."""
