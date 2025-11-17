@@ -243,7 +243,7 @@ class SparkShell:
 
         print(f"[SparkShell] Build cached successfully")
 
-    def _run_command(self, cmd, cwd=None, timeout=None, check=True):
+    def _run_command(self, cmd, cwd=None, timeout=None, check=True, force_output=False):
         """
         Run a command with optional verbose output.
 
@@ -252,6 +252,7 @@ class SparkShell:
             cwd: Working directory
             timeout: Timeout in seconds
             check: Raise exception on non-zero exit code
+            force_output: If True, stream output even when verbose=False
 
         Returns:
             subprocess.CompletedProcess
@@ -259,7 +260,7 @@ class SparkShell:
         if self.op_config.verbose:
             print(f"[SparkShell] Running: {' '.join(cmd)}")
 
-        if self.op_config.verbose:
+        if self.op_config.verbose or force_output:
             # Stream output in real-time
             result = subprocess.run(
                 cmd,
@@ -453,12 +454,13 @@ class SparkShell:
         os.chmod(sbt_script, 0o755)
 
         try:
-            # Run sbt assembly
+            # Run sbt assembly - always show output so users see build progress
             result = self._run_command(
                 [str(sbt_script), "assembly"],
                 cwd=self.work_dir,
                 timeout=self.op_config.build_timeout,
-                check=True
+                check=True,
+                force_output=True
             )
 
             # Find the JAR file
