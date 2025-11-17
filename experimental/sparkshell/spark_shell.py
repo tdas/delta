@@ -185,6 +185,24 @@ class SparkShell:
 
         print(f"[SparkShell] Using cached JAR: {self.jar_path}")
 
+    def _ensure_sbtopts(self):
+        """
+        Ensure .sbtopts file is present in work_dir.
+        This must be called after work_dir is finalized (after cache decision).
+        """
+        if not self.work_dir:
+            raise RuntimeError("work_dir must be set before calling _ensure_sbtopts")
+
+        sbtopts_src = _MODULE_DIR / "build" / ".sbtopts"
+        sbtopts_dest = self.work_dir / ".sbtopts"
+
+        if sbtopts_src.exists():
+            shutil.copy2(sbtopts_src, sbtopts_dest)
+            if self.op_config.verbose:
+                print(f"[SparkShell] Copied .sbtopts to {sbtopts_dest}")
+        else:
+            print(f"[SparkShell] Warning: {sbtopts_src} not found, SBT will use default memory settings")
+
     def _cache_build(self):
         """Cache the current build for future reuse."""
         if not self.work_dir or not self.jar_path:
@@ -299,16 +317,6 @@ class SparkShell:
                         f"Ensure source contains a valid SparkApp project."
                     )
 
-            # Always copy .sbtopts from SparkShell project's build/ directory to work_dir
-            # This ensures consistent SBT memory settings regardless of source
-            sbtopts_src = _MODULE_DIR / "build" / ".sbtopts"
-            sbtopts_dest = self.work_dir / ".sbtopts"
-            if sbtopts_src.exists():
-                shutil.copy2(sbtopts_src, sbtopts_dest)
-                print("[SparkShell] Copied .sbtopts from SparkShell project for SBT memory configuration")
-            else:
-                print(f"[SparkShell] Warning: {sbtopts_src} not found, SBT will use default memory settings")
-
         print("[SparkShell] Setup complete")
     
     def _download_from_github(self):
@@ -397,7 +405,12 @@ class SparkShell:
         # Check if we can use cached build
         if not force_refresh and self._has_cached_build():
             self._use_cached_build()
+            # Ensure .sbtopts is present in the cached work_dir
+            self._ensure_sbtopts()
             return
+
+        # Ensure .sbtopts is present in work_dir before building
+        self._ensure_sbtopts()
 
         print("[SparkShell] Building assembly JAR...")
         print("[SparkShell] This may take several minutes on first run...")

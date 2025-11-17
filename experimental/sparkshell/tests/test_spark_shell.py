@@ -340,6 +340,86 @@ class TestConfigurationClasses(unittest.TestCase):
         print("✓ Default configs work correctly")
 
 
+class TestSbtoptsPlacement(unittest.TestCase):
+    """Test cases to ensure .sbtopts is correctly placed in work_dir."""
+
+    def test_sbtopts_placement_fresh_and_cached(self):
+        """Test that .sbtopts is placed correctly for both fresh and cached builds."""
+        test_dir = os.path.dirname(os.path.abspath(__file__))
+        sparkshell_dir = os.path.dirname(test_dir)
+
+        # First verify source .sbtopts exists
+        sbtopts_source = os.path.join(sparkshell_dir, "build", ".sbtopts")
+        self.assertTrue(os.path.exists(sbtopts_source),
+                       f"Source .sbtopts should exist at {sbtopts_source}")
+        print("✓ Source .sbtopts file exists")
+
+        # Test fresh build - create a build that will be cached
+        shell1 = SparkShell(
+            source=sparkshell_dir,
+            port=8095,
+            op_config=OpConfig(
+                verbose=False,
+                auto_start=False,
+                cleanup_on_exit=False  # Don't clean up so cache persists
+            )
+        )
+
+        try:
+            shell1.setup()
+            shell1.build()
+            cache_dir = shell1._get_cache_dir()
+
+            # Verify .sbtopts exists after fresh build
+            sbtopts_path = shell1.work_dir / ".sbtopts"
+            self.assertTrue(sbtopts_path.exists(),
+                           f".sbtopts should exist at {sbtopts_path}")
+            print("✓ .sbtopts correctly placed for fresh build")
+
+            # Test cached build - create a second shell that will use the cache
+            shell2 = SparkShell(
+                source=sparkshell_dir,
+                port=8096,
+                op_config=OpConfig(
+                    verbose=False,
+                    auto_start=False,
+                    cleanup_on_exit=True
+                )
+            )
+
+            try:
+                shell2.setup()
+
+                # Verify cache exists before build
+                self.assertTrue(shell2._has_cached_build(),
+                               "Cache should exist from first build")
+
+                # Build (should use cache)
+                shell2.build()
+
+                # Verify work_dir points to cache
+                self.assertEqual(shell2.work_dir, cache_dir,
+                                "work_dir should point to cache directory")
+
+                # Verify .sbtopts exists in the cache directory
+                sbtopts_cached_path = cache_dir / ".sbtopts"
+                self.assertTrue(sbtopts_cached_path.exists(),
+                               f".sbtopts should exist in cache at {sbtopts_cached_path}")
+                print("✓ .sbtopts correctly placed when using cached build")
+
+            finally:
+                # Clean up shell2's temp work_dir if it exists
+                if shell2.work_dir and shell2.work_dir != cache_dir and shell2.work_dir.exists():
+                    import shutil
+                    shutil.rmtree(shell2.work_dir)
+
+        finally:
+            # Clean up cache from shell1
+            if shell1.work_dir and shell1.work_dir.exists():
+                import shutil
+                shutil.rmtree(shell1.work_dir)
+
+
 if __name__ == "__main__":
     # Run tests with verbose output
     print("\n" + "="*70)
