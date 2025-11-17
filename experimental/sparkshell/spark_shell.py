@@ -289,6 +289,17 @@ class SparkShell:
                         f"Ensure source contains a valid SparkApp project."
                     )
 
+            # Always copy .sbtopts from SparkShell project's build/ directory to work_dir
+            # This ensures consistent SBT memory settings regardless of source
+            sparkshell_dir = Path(__file__).parent
+            sbtopts_src = sparkshell_dir / "build" / ".sbtopts"
+            sbtopts_dest = self.work_dir / ".sbtopts"
+            if sbtopts_src.exists():
+                shutil.copy2(sbtopts_src, sbtopts_dest)
+                print("[SparkShell] Copied .sbtopts from SparkShell project for SBT memory configuration")
+            else:
+                print(f"[SparkShell] Warning: {sbtopts_src} not found, SBT will use default memory settings")
+
         print("[SparkShell] Setup complete")
     
     def _download_from_github(self):
@@ -334,7 +345,7 @@ class SparkShell:
                             shutil.move(str(item), str(self.work_dir / item.name))
                         # Remove empty subdirectories
                         shutil.rmtree(subdir_path.parent if subdir_path.parent != self.work_dir else subdir_path)
-                
+
                 print("[SparkShell] Download complete")
             except subprocess.CalledProcessError as e:
                 raise RuntimeError(f"Failed to clone from GitHub: {e.stderr.decode() if e.stderr else str(e)}")
@@ -349,22 +360,22 @@ class SparkShell:
     def _copy_from_local(self):
         """Copy SparkApp code from local directory."""
         print("[SparkShell] Copying from local directory...")
-        
+
         source_path = Path(self.source).expanduser().resolve()
         if not source_path.exists():
             raise FileNotFoundError(f"Source directory not found: {source_path}")
-        
+
         # Copy all files
         for item in source_path.iterdir():
             if item.name in [".git", "target", "project/target", "sparkapp.log", "sparkapp.pid"]:
                 continue  # Skip unnecessary files
-            
+
             dest = self.work_dir / item.name
             if item.is_dir():
                 shutil.copytree(item, dest, ignore=shutil.ignore_patterns("target", ".git"))
             else:
                 shutil.copy2(item, dest)
-        
+
         print("[SparkShell] Copy complete")
     
     def build(self, force_refresh: bool = False):
