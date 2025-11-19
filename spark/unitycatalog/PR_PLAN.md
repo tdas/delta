@@ -96,10 +96,11 @@ All changes have been developed and tested locally on branch `spark-uc`. Ready t
 
 ## GitHub PR Creation
 
-All 5 PR branches have been pushed to `tdas/delta` fork and are ready for GitHub PR creation.
+All 5 PR branches have been pushed to `tdas/delta` fork. PRs have been created using git-stack.
 
 ### PR 1: Unity Catalog Foundation + Repository Setup
-**URL:** https://github.com/delta-io/delta/compare/master...tdas:spark-uc-pr1-foundation  
+**PR #5523:** https://github.com/delta-io/delta/pull/5523  
+**Compare:** https://github.com/delta-io/delta/compare/master...tdas:spark-uc-pr1-foundation  
 **Title:** `Unity Catalog integration foundation and repository setup for Delta Lake`  
 **Description:**
 ```
@@ -127,7 +128,8 @@ Establishes the foundation for comprehensive Unity Catalog support in Delta Lake
 ```
 
 ### PR 2: DML Framework
-**URL:** https://github.com/delta-io/delta/compare/master...tdas:spark-uc-pr2-dml-framework  
+**PR #5524:** https://github.com/delta-io/delta/pull/5524 (Draft)  
+**Compare:** https://github.com/delta-io/delta/compare/master...tdas:spark-uc-pr2-dml-framework  
 **Title:** `Unity Catalog DML operations with pluggable SQL execution framework`  
 **Description:**
 ```
@@ -155,7 +157,8 @@ Builds on the foundation to provide complete DML validation framework.
 ```
 
 ### PR 3: DDL Operations
-**URL:** https://github.com/delta-io/delta/compare/master...tdas:spark-uc-pr3-ddl  
+**PR #5525:** https://github.com/delta-io/delta/pull/5525 (Draft)  
+**Compare:** https://github.com/delta-io/delta/compare/master...tdas:spark-uc-pr3-ddl  
 **Title:** `Unity Catalog DDL operations comprehensive test coverage`  
 **Description:**
 ```
@@ -184,7 +187,8 @@ Builds on the DML framework to provide complete DDL operation validation.
 ```
 
 ### PR 4: Utility Operations
-**URL:** https://github.com/delta-io/delta/compare/master...tdas:spark-uc-pr4-utility  
+**PR #5526:** https://github.com/delta-io/delta/pull/5526 (Draft)  
+**Compare:** https://github.com/delta-io/delta/compare/master...tdas:spark-uc-pr4-utility  
 **Title:** `Unity Catalog utility operations and maintenance commands`  
 **Description:**
 ```
@@ -214,7 +218,8 @@ Builds on DDL operations to provide complete utility operation support.
 ```
 
 ### PR 5: Advanced Read Operations
-**URL:** https://github.com/delta-io/delta/compare/master...tdas:spark-uc-pr5-read  
+**PR #5527:** https://github.com/delta-io/delta/pull/5527 (Draft)  
+**Compare:** https://github.com/delta-io/delta/compare/master...tdas:spark-uc-pr5-read  
 **Title:** `Unity Catalog advanced read operations and time travel support`  
 **Description:**
 ```
