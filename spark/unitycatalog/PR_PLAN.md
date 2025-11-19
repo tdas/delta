@@ -104,27 +104,9 @@ All 5 PR branches have been pushed to `tdas/delta` fork. PRs have been created u
 **Title:** `Unity Catalog integration foundation and repository setup for Delta Lake`  
 **Description:**
 ```
-## Summary
-Establishes foundational Unity Catalog integration for Delta Lake with embedded UC server lifecycle management, comprehensive test framework, and proper repository hygiene.
+Establishes foundational Unity Catalog integration for Delta Lake with embedded UC server lifecycle management and comprehensive test framework.
 
-## Changes
-- **Module Setup**: New `sparkUnityCatalog` SBT module with UC dependencies
-- **Server Integration**: `UnityCatalogSupport` trait for UC server lifecycle management  
-- **Test Framework**: Complete test suite validating UC-Delta integration
-- **Package Structure**: Clean `com.sparkuctest` package organization
-- **Repository Setup**: .gitignore updates, PR planning docs, git stack management guide
-
-## Testing
-- 4 comprehensive integration tests covering UC server startup, catalog creation, and basic table operations
-- All tests pass with Unity Catalog 0.3.0 and Spark 4.0
-- Validates end-to-end UC server connectivity and Delta table registration
-
-## Dependencies  
-- Unity Catalog 0.3.0 (unitycatalog-spark, unitycatalog-client)
-- Uses shaded UC server JAR to avoid dependency conflicts
-- Compatible with Spark 4.0 and Delta Lake
-
-Establishes the foundation for comprehensive Unity Catalog support in Delta Lake.
+Adds new `sparkUnityCatalog` SBT module with Unity Catalog 0.3.0 dependencies, `UnityCatalogSupport` trait for managing UC server lifecycle in tests, and `UnityCatalogSupportSuite` with 4 integration tests validating UC-Delta connectivity and table operations. Uses shaded UC server JAR to avoid dependency conflicts. Compatible with Spark 4.0 and Delta Lake. Includes repository setup (.gitignore updates).
 ```
 
 ### PR 2: DML Framework
@@ -133,27 +115,9 @@ Establishes the foundation for comprehensive Unity Catalog support in Delta Lake
 **Title:** `Unity Catalog DML operations with pluggable SQL execution framework`  
 **Description:**
 ```
-## Summary
 Adds comprehensive Data Manipulation Language (DML) test suite with pluggable SQLExecutor framework for Unity Catalog managed Delta tables.
 
-## Changes
-- **SQLExecutor Framework**: Pluggable test framework supporting different SQL execution backends
-- **Comprehensive DML Suite**: Complete coverage of INSERT, UPDATE, DELETE, and MERGE operations
-- **Helper Methods**: `withNewTable`, `sql`, `check` utilities to reduce test boilerplate
-- **Delta-Specific Features**: INSERT OVERWRITE, INSERT REPLACE WHERE, complex MERGE scenarios
-
-## Testing  
-- 13 DML tests covering all data manipulation patterns
-- INSERT operations: append, overwrite, replace, multiple patterns
-- Advanced operations: UPDATE/DELETE with conditions, MERGE with schema evolution
-- Framework validation through comprehensive real-world usage
-
-## Key Benefits
-- No untested framework code - SQLExecutor validated through immediate DML usage
-- Extensible pattern for future SQL execution backends  
-- Comprehensive validation of Delta DML operations through Unity Catalog
-
-Builds on the foundation to provide complete DML validation framework.
+Introduces `UCDeltaTableIntegrationSuiteBase` with pluggable SQLExecutor framework and helper methods (`withNewTable`, `sql`, `check`), and `UCDeltaTableDMLSuite` with 13 tests covering INSERT (append, overwrite, replace, multiple patterns), UPDATE, DELETE, and MERGE operations including schema evolution. Framework is validated through immediate real-world usage with no untested code.
 ```
 
 ### PR 3: DDL Operations
@@ -162,28 +126,9 @@ Builds on the foundation to provide complete DML validation framework.
 **Title:** `Unity Catalog DDL operations comprehensive test coverage`  
 **Description:**
 ```
-## Summary
 Comprehensive Data Definition Language (DDL) test suite for Unity Catalog managed Delta tables covering schema operations, metadata management, and table lifecycle.
 
-## Changes
-- **Schema Operations**: CREATE/DROP tables with various data types and configurations
-- **Metadata Validation**: DESCRIBE, DESCRIBE EXTENDED for table introspection
-- **Table Lifecycle**: CREATE TABLE AS SELECT (CTAS), IF NOT EXISTS patterns
-- **UC Integration**: Table registration verification and catalog metadata queries
-
-## Testing
-- 9 DDL tests covering complete table definition and schema management
-- Data type validation: BIGINT, STRING, DECIMAL, BOOLEAN, TIMESTAMP
-- UC-specific behaviors: managed table creation, catalog visibility
-- Edge cases: special characters in table names, table properties
-
-## Coverage
-- Table creation patterns and data type handling
-- Schema introspection and metadata operations  
-- Unity Catalog table registration and visibility
-- Error handling for invalid operations
-
-Builds on the DML framework to provide complete DDL operation validation.
+Adds `UCDeltaTableDDLSuite` with 9 tests covering CREATE/DROP tables with various data types (BIGINT, STRING, DECIMAL, BOOLEAN, TIMESTAMP), CREATE TABLE AS SELECT (CTAS), IF NOT EXISTS patterns, DESCRIBE and DESCRIBE EXTENDED for table introspection, and Unity Catalog table registration verification.
 ```
 
 ### PR 4: Utility Operations
@@ -192,29 +137,9 @@ Builds on the DML framework to provide complete DDL operation validation.
 **Title:** `Unity Catalog utility operations and maintenance commands`  
 **Description:**
 ```
-## Summary  
 Comprehensive test suite for Delta utility and maintenance operations on Unity Catalog managed tables including optimization, history tracking, and catalog metadata queries.
 
-## Changes
-- **Table Optimization**: OPTIMIZE and ZORDER BY operations for UC managed tables
-- **History Tracking**: DESCRIBE HISTORY with UC-specific operation logging
-- **Catalog Operations**: SHOW CATALOGS, SHOW SCHEMAS, SHOW COLUMNS validation
-- **Maintenance Operations**: Concurrent-safe operations and table statistics
-
-## Testing
-- 10 utility tests covering optimization, history, and catalog metadata
-- OPTIMIZE operations with and without ZORDER BY
-- Flexible DESCRIBE HISTORY validation accounting for UC operation structure  
-- Comprehensive catalog and schema introspection
-- Concurrent operation safety validation
-
-## Key Features
-- Robust history validation adapted for Unity Catalog operation logging
-- Complete catalog metadata operation coverage
-- Table maintenance and optimization validation
-- Error handling for unsupported operations
-
-Builds on DDL operations to provide complete utility operation support.
+Adds `UCDeltaTableUtilitySuite` with 10 tests covering OPTIMIZE and ZORDER BY operations, DESCRIBE HISTORY with flexible UC-specific validation, SHOW CATALOGS/SCHEMAS/COLUMNS for catalog metadata, and concurrent-safe operation validation.
 ```
 
 ### PR 5: Advanced Read Operations
@@ -223,30 +148,9 @@ Builds on DDL operations to provide complete utility operation support.
 **Title:** `Unity Catalog advanced read operations and time travel support`  
 **Description:**
 ```
-## Summary
 Unity Catalog-specific read capabilities including time travel, access patterns, schema evolution, and advanced query support for managed Delta tables.
 
-## Changes  
-- **Time Travel**: Version-based and timestamp-based historical reads
-- **Access Patterns**: Catalog-qualified vs spark_catalog access validation
-- **Read Consistency**: Multi-operation consistency and concurrent read safety
-- **Schema Evolution**: Column selection and metadata-driven reads
-- **UC Integration**: Direct UC SDK validation alongside Spark SQL operations
-
-## Testing
-- 7 specialized read tests focusing on UC-specific behaviors
-- Time travel robustness with graceful UC limitation handling
-- Catalog access pattern validation and table visibility
-- Read consistency across multiple table operations
-- Schema evolution and metadata-driven query support
-
-## Key Features
-- Robust time travel implementation with UC compatibility checks
-- Comprehensive access pattern validation (UC vs standard catalogs)
-- Read consistency validation across complex operation sequences
-- Schema evolution support testing
-
-Builds on utility operations to provide complete advanced read operation support.
+Adds `UCDeltaTableReadSuite` with 7 tests covering version-based and timestamp-based time travel with graceful UC limitation handling, catalog-qualified vs spark_catalog access patterns, read consistency across multiple operations, concurrent read safety, and schema evolution support.
 ```
 
 ### Quick PR Creation Steps
