@@ -34,6 +34,7 @@ import org.apache.spark.sql.delta.v2.read.deletionvector.DeletionVectorSchemaCon
 import org.apache.spark.sql.delta.v2.tablemanager.DeltaV2TableManager
 import org.apache.spark.sql.delta.v2.utils.{PartitionUtils, PartitionValueCaster, ScalaUtils}
 import org.apache.spark.sql.delta.v2.utils.ExpressionUtils.dsv2PredicateToCatalystExpression
+import org.apache.spark.sql.delta.v2.utils.StatsUtils
 import org.apache.spark.sql.delta.v2.utils.SchemaUtils
 import org.apache.hadoop.conf.Configuration
 import io.delta.kernel.expressions.{Predicate => KernelPredicate}
@@ -356,11 +357,11 @@ private[read] class DeltaV2Scan(
   ): Statistics = {
     val reportedSizeInBytes = sizeInBytesArg.toJavaPrimitive
     val reportedNumRows = numRowsArg.toJavaPrimitive
-    new Statistics {
-      override def sizeInBytes(): OptionalLong = reportedSizeInBytes
-      override def numRows(): OptionalLong = reportedNumRows
-      override def columnStats(): JMap[NamedReference, ColumnStatistics] = columnStatsArg
-    }
+    StatsUtils.createStatistics(
+      reportedSizeInBytes,
+      reportedNumRows,
+      columnStatsArg
+    )
   }
 
   /**

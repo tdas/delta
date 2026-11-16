@@ -61,22 +61,33 @@ public final class StatsUtils {
 
     Map<NamedReference, ColumnStatistics> colStatsMap = buildColumnStats(catalogStats, columnTypes);
 
+    return createStatistics(
+        OptionalLong.of(catalogStats.sizeInBytes().longValue()),
+        toJavaOptional(catalogStats.rowCount())
+            .map(r -> OptionalLong.of(r.longValue()))
+            .orElse(OptionalLong.empty()),
+        colStatsMap);
+  }
+
+  /** Creates connector statistics from their reported values. */
+  public static Statistics createStatistics(
+      OptionalLong sizeInBytes,
+      OptionalLong numRows,
+      Map<NamedReference, ColumnStatistics> columnStats) {
     return new Statistics() {
       @Override
       public OptionalLong sizeInBytes() {
-        return OptionalLong.of(catalogStats.sizeInBytes().longValue());
+        return sizeInBytes;
       }
 
       @Override
       public OptionalLong numRows() {
-        return toJavaOptional(catalogStats.rowCount())
-            .map(r -> OptionalLong.of(r.longValue()))
-            .orElse(OptionalLong.empty());
+        return numRows;
       }
 
       @Override
       public Map<NamedReference, ColumnStatistics> columnStats() {
-        return colStatsMap;
+        return columnStats;
       }
     };
   }
