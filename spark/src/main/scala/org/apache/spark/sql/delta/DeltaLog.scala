@@ -16,6 +16,8 @@
 
 package org.apache.spark.sql.delta
 
+// Reduced-matrix CI validation; do not merge.
+
 // scalastyle:off import.ordering.noEmptyLine
 import java.io.IOException
 import java.lang.ref.WeakReference
