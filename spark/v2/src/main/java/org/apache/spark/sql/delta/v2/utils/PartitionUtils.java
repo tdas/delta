@@ -397,10 +397,9 @@ public class PartitionUtils {
       InternalRow partitionRow,
       String tablePath) {
     scala.collection.immutable.Map<String, Object> metadata =
-        mergeIntoScalaMap(
-            buildDvMetadataScala(deletionVector),
-            buildRowTrackingMetadata(baseRowId, defaultRowCommitVersion));
-    return makePartitionedFile(
+        buildPartitionedFileMetadata(
+            buildDvMetadata(deletionVector), baseRowId, defaultRowCommitVersion);
+    return buildPartitionedFile(
         new Path(tablePath, path).toString(), size, modificationTime, partitionRow, metadata);
   }
 
@@ -423,13 +422,13 @@ public class PartitionUtils {
             ? emptyScalaMap()
             : buildDvMetadata(dv.serializeToBase64(), RowIndexFilterType.IF_CONTAINED);
     final scala.collection.immutable.Map<String, Object> metadata =
-        mergeIntoScalaMap(
+        buildPartitionedFileMetadata(
             dvMetadata,
-            buildRowTrackingMetadata(
-                toJavaLong(v1AddFile.baseRowId()),
-                toJavaLong(v1AddFile.defaultRowCommitVersion())));
-    return makePartitionedFile(
-        new Path(tablePath, v1AddFile.path()).toString(),
+            toJavaLong(v1AddFile.baseRowId()),
+            toJavaLong(v1AddFile.defaultRowCommitVersion()));
+    final String path = new Path(tablePath, v1AddFile.path()).toString();
+    return buildPartitionedFile(
+        path,
         v1AddFile.size(),
         v1AddFile.modificationTime(),
         getPartitionRow(v1AddFile.partitionValues(), caster),
@@ -506,7 +505,7 @@ public class PartitionUtils {
         cdcFile.getAddFile() != null
             ? cdcFile.getAddFile().getModificationTime()
             : cdcFile.getCommitTimestamp();
-    return makePartitionedFile(
+    return buildPartitionedFile(
         new Path(tablePath, cdcFile.getPath()).toString(),
         cdcFile.getFileSize(),
         modificationTime,
@@ -514,7 +513,7 @@ public class PartitionUtils {
         metadata);
   }
 
-  private static PartitionedFile makePartitionedFile(
+  private static PartitionedFile buildPartitionedFile(
       String path,
       long size,
       long modificationTime,
@@ -861,16 +860,12 @@ public class PartitionUtils {
    * {@code dvBase64} is {@code null}.
    */
   public static Map<String, Object> buildDvMetadata(String dvBase64) {
-    Map<String, Object> metadata = new HashMap<>();
-    if (dvBase64 != null) {
-      metadata.put(DeltaParquetFileFormat.FILE_ROW_INDEX_FILTER_ID_ENCODED(), dvBase64);
-      metadata.put(
-          DeltaParquetFileFormat.FILE_ROW_INDEX_FILTER_TYPE(), RowIndexFilterType.IF_CONTAINED);
-    }
-    return metadata;
+    return dvBase64 == null
+        ? new HashMap<>()
+        : buildDvMetadataMap(dvBase64, RowIndexFilterType.IF_CONTAINED);
   }
 
-  private static scala.collection.immutable.Map<String, Object> buildDvMetadataScala(
+  private static scala.collection.immutable.Map<String, Object> buildDvMetadata(
       Optional<DeletionVectorDescriptor> dvOpt) {
     Map<String, Object> metadata =
         buildDvMetadata(dvOpt.map(DeletionVectorDescriptor::serializeToBase64).orElse(null));
@@ -879,10 +874,16 @@ public class PartitionUtils {
 
   private static scala.collection.immutable.Map<String, Object> buildDvMetadata(
       String dvBase64, RowIndexFilterType filterType) {
+    Map<String, Object> metadata = buildDvMetadataMap(dvBase64, filterType);
+    return scala.collection.immutable.Map$.MODULE$.from(CollectionConverters.asScala(metadata));
+  }
+
+  private static Map<String, Object> buildDvMetadataMap(
+      String dvBase64, RowIndexFilterType filterType) {
     Map<String, Object> metadata = new HashMap<>();
     metadata.put(DeltaParquetFileFormat.FILE_ROW_INDEX_FILTER_ID_ENCODED(), dvBase64);
     metadata.put(DeltaParquetFileFormat.FILE_ROW_INDEX_FILTER_TYPE(), filterType);
-    return scala.collection.immutable.Map$.MODULE$.from(CollectionConverters.asScala(metadata));
+    return metadata;
   }
 
   /**
@@ -915,5 +916,13 @@ public class PartitionUtils {
                   defaultRowCommitVersion.get()));
     }
     return result;
+  }
+
+  private static scala.collection.immutable.Map<String, Object> buildPartitionedFileMetadata(
+      scala.collection.immutable.Map<String, Object> dvMetadata,
+      Optional<Long> baseRowId,
+      Optional<Long> defaultRowCommitVersion) {
+    return mergeIntoScalaMap(
+        dvMetadata, buildRowTrackingMetadata(baseRowId, defaultRowCommitVersion));
   }
 }
