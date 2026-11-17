@@ -56,6 +56,7 @@ import org.apache.spark.sql.delta.storage.ClosableIterator.ClosableWrapper
 import org.apache.spark.sql.delta.storage.ClosableIterator.IteratorCloseOps
 import org.apache.spark.sql.delta.storage.ClosableIterator.IteratorFlatMapCloseOp
 import org.apache.spark.sql.delta.v2.CDCDeletionVectorHelper
+import org.apache.spark.sql.delta.v2.DeltaV2StartVersionRetry
 import org.apache.spark.sql.delta.v2.interop.DeltaV2QueryContext
 import org.apache.spark.sql.delta.v2.interop.DeltaV2SnapshotManager
 import org.apache.spark.sql.delta.v2.interop.DeltaV2SnapshotManager.GetTableChangesParam
@@ -71,7 +72,6 @@ import org.apache.hadoop.conf.Configuration
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import io.delta.kernel.CommitActions
-import io.delta.kernel.CommitRange
 import io.delta.kernel.data.ColumnarBatch
 import io.delta.kernel.engine.Engine
 import io.delta.kernel.exceptions.UnsupportedProtocolVersionException
@@ -1047,38 +1047,25 @@ private[read] class DeltaV2MicroBatchStream(
     // Start commit may be missing (e.g. due to log retention). When failOnDataLoss=false, skip
     // to the earliest available version. Mid-log gaps still throw regardless of failOnDataLoss -
     // stricter than DSv1.
-    var commitRange: CommitRange = null
-    var earliestVersionToFetch: Long = startVersion
-    var attempt: Int = 1
-    var fetched: Boolean = false
-    while (!fetched && attempt <= FAIL_ON_DATA_LOSS_FALSE_MAX_ATTEMPTS) {
-      try {
-        commitRange =
-            snapshotManager.getTableChanges(
-                engine,
-                GetTableChangesParam.apply(earliestVersionToFetch, endVersionOpt),
-                originalStreamingQueryContext)
-        fetched = true
-      } catch {
-      case e: io.delta.kernel.exceptions.StartVersionNotFoundException =>
-        if (options.failOnDataLoss
-            || !e.getEarliestAvailableVersion().isPresent()
-            || attempt >= FAIL_ON_DATA_LOSS_FALSE_MAX_ATTEMPTS) {
-          throw e
-        }
-        earliestVersionToFetch = e.getEarliestAvailableVersion().get()
+    val commitRange = DeltaV2StartVersionRetry.get(
+      startVersion,
+      options.failOnDataLoss) { earliestVersionToFetch =>
+        snapshotManager.getTableChanges(
+            engine,
+            GetTableChangesParam.apply(earliestVersionToFetch, endVersionOpt),
+            originalStreamingQueryContext)
+      } { (attempt, maxAttempts, earliestVersionToFetch) =>
         logger.warn(
             "Start version commit {} no longer exists for table {} (attempt {}/{}). "
                 + "Skipping to earliest available version {} because failOnDataLoss is false.",
             Long.box(startVersion),
             tablePath,
             Int.box(attempt),
-            Int.box(FAIL_ON_DATA_LOSS_FALSE_MAX_ATTEMPTS),
+            Int.box(maxAttempts),
             Long.box(earliestVersionToFetch))
-      case e: io.delta.kernel.exceptions.CommitRangeNotFoundException =>
-        return new ClosableWrapper[CommitActions](Iterator.empty).toClosable
       }
-      attempt += 1
+    if (commitRange.isEmpty) {
+      return new ClosableWrapper[CommitActions](Iterator.empty).toClosable
     }
 
     // Use getCommitActionsFromRangeUnsafe instead of CommitRange.getCommitActions() because:
@@ -1090,7 +1077,7 @@ private[read] class DeltaV2MicroBatchStream(
     ScalaUtils.toClosableIterator(
         StreamingHelper.getCommitActionsFromRangeUnsafe(
             engine,
-            commitRange.asInstanceOf[
+            commitRange.get.asInstanceOf[
                 io.delta.kernel.internal.commitrange.CommitRangeImpl],
             snapshotAtSourceInit.dataPath.toString,
             actionSet))
