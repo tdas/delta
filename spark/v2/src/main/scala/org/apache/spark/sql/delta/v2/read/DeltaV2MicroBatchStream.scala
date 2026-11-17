@@ -1047,7 +1047,7 @@ private[read] class DeltaV2MicroBatchStream(
     // Start commit may be missing (e.g. due to log retention). When failOnDataLoss=false, skip
     // to the earliest available version. Mid-log gaps still throw regardless of failOnDataLoss -
     // stricter than DSv1.
-    val commitRange = DeltaV2StartVersionRetry.get(
+    val commitRange = DeltaV2StartVersionRetry.fetchWithStartVersionRetry(
       startVersion,
       options.failOnDataLoss) { earliestVersionToFetch =>
         snapshotManager.getTableChanges(

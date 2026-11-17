@@ -18,6 +18,7 @@ package org.apache.spark.sql.delta.v2.tablemanager
 import java.util.concurrent.atomic.AtomicReference
 
 import org.apache.spark.sql.delta.{DeltaSingleCommit, Snapshot}
+import org.apache.spark.sql.delta.logging.DeltaLogKeys
 import org.apache.spark.sql.delta.storage.{ClosableIterator, LogStoreProvider}
 import org.apache.spark.sql.delta.storage.ClosableIterator.ClosableWrapper
 import org.apache.spark.sql.delta.v2.{DeltaV2Logging, DeltaV2StartVersionRetry}
@@ -85,7 +86,7 @@ private[tablemanager] class DeltaV2TableManagerImpl(
       : ClosableIterator[DeltaSingleCommit] = {
     val kernelEngine = kernelContext.getDefaultEngine()
     val hadoopConf = kernelContext.materializeHadoopConf()
-    val commitRange = DeltaV2StartVersionRetry.get(
+    val commitRange = DeltaV2StartVersionRetry.fetchWithStartVersionRetry(
       startVersion,
       failOnDataLoss) { earliestVersionToFetch =>
         cachedSnapshotManager.getTableChanges(
@@ -93,10 +94,13 @@ private[tablemanager] class DeltaV2TableManagerImpl(
           GetTableChangesParam(earliestVersionToFetch, endVersion, false, failOnDataLoss),
           queryContext)
       } { (attempt, maxAttempts, earliestVersionToFetch) =>
-        logWarning(
-          s"Start version commit $startVersion no longer exists for table $tablePath " +
-            s"(attempt $attempt/$maxAttempts). Skipping to earliest available " +
-            s"version $earliestVersionToFetch because failOnDataLoss is false.")
+        logWarning(log"Start version commit " +
+          log"${MDC(DeltaLogKeys.START_VERSION, startVersion)} no longer exists for table " +
+          log"${MDC(DeltaLogKeys.PATH, tablePath)} " +
+          log"(attempt ${MDC(DeltaLogKeys.ATTEMPT, attempt)}/" +
+          log"${MDC(DeltaLogKeys.NUM_ATTEMPT, maxAttempts)}). Skipping to earliest available " +
+          log"version ${MDC(DeltaLogKeys.VERSION, earliestVersionToFetch)} because " +
+          log"failOnDataLoss is false.")
       }
     if (commitRange.isEmpty) {
       return new ClosableWrapper[DeltaSingleCommit](Iterator.empty).toClosable

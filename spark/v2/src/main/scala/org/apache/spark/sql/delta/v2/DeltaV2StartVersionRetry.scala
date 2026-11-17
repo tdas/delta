@@ -20,6 +20,8 @@ import io.delta.kernel.exceptions.{
   StartVersionNotFoundException
 }
 
+import org.apache.spark.SparkException
+
 private[v2] object DeltaV2StartVersionRetry {
   /**
    * Attempt 1 uses the requested start version. Attempt 2 uses the earliest available version.
@@ -27,7 +29,11 @@ private[v2] object DeltaV2StartVersionRetry {
    */
   private val MaxAttempts = 3
 
-  def get[T](
+  /**
+   * Fetches with up to three attempts, retrying a missing start version when data loss is allowed.
+   * Returns None when the fetch throws [[CommitRangeNotFoundException]], indicating an empty range.
+   */
+  def fetchWithStartVersionRetry[T](
       startVersion: Long,
       failOnDataLoss: Boolean)(
       fetch: Long => T)(
@@ -50,6 +56,6 @@ private[v2] object DeltaV2StartVersionRetry {
       }
       attempt += 1
     }
-    throw new IllegalStateException("Unreachable start-version retry state")
+    throw SparkException.internalError("Unreachable start-version retry state")
   }
 }
