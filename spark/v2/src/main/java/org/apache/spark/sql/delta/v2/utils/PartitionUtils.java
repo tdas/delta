@@ -859,7 +859,7 @@ public class PartitionUtils {
    * {@code IF_CONTAINED} filter semantics (visible-rows semantics). Returns an empty map when
    * {@code dvBase64} is {@code null}.
    */
-  public static scala.collection.immutable.Map<String, Object> buildDvMetadata(
+  private static scala.collection.immutable.Map<String, Object> buildDvMetadata(
       Optional<DeletionVectorDescriptor> dvOpt) {
     return dvOpt.isPresent()
         ? buildDvMetadata(dvOpt.get().serializeToBase64(), RowIndexFilterType.IF_CONTAINED)
