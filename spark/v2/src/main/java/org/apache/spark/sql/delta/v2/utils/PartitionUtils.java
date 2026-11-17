@@ -399,7 +399,7 @@ public class PartitionUtils {
     scala.collection.immutable.Map<String, Object> metadata =
         buildPartitionedFileMetadata(
             buildDvMetadata(deletionVector), baseRowId, defaultRowCommitVersion);
-    return buildPartitionedFile(
+    return makePartitionedFile(
         new Path(tablePath, path).toString(), size, modificationTime, partitionRow, metadata);
   }
 
@@ -427,7 +427,7 @@ public class PartitionUtils {
             toJavaLong(v1AddFile.baseRowId()),
             toJavaLong(v1AddFile.defaultRowCommitVersion()));
     final String path = new Path(tablePath, v1AddFile.path()).toString();
-    return buildPartitionedFile(
+    return makePartitionedFile(
         path,
         v1AddFile.size(),
         v1AddFile.modificationTime(),
@@ -505,7 +505,7 @@ public class PartitionUtils {
         cdcFile.getAddFile() != null
             ? cdcFile.getAddFile().getModificationTime()
             : cdcFile.getCommitTimestamp();
-    return buildPartitionedFile(
+    return makePartitionedFile(
         new Path(tablePath, cdcFile.getPath()).toString(),
         cdcFile.getFileSize(),
         modificationTime,
@@ -513,7 +513,7 @@ public class PartitionUtils {
         metadata);
   }
 
-  private static PartitionedFile buildPartitionedFile(
+  private static PartitionedFile makePartitionedFile(
       String path,
       long size,
       long modificationTime,
@@ -859,6 +859,13 @@ public class PartitionUtils {
    * {@code IF_CONTAINED} filter semantics (visible-rows semantics). Returns an empty map when
    * {@code dvBase64} is {@code null}.
    */
+  public static scala.collection.immutable.Map<String, Object> buildDvMetadata(
+      Optional<DeletionVectorDescriptor> dvOpt) {
+    return dvOpt.isPresent()
+        ? buildDvMetadata(dvOpt.get().serializeToBase64(), RowIndexFilterType.IF_CONTAINED)
+        : emptyScalaMap();
+  }
+
   public static Map<String, Object> buildDvMetadata(String dvBase64) {
     return dvBase64 == null
         ? new HashMap<>()
@@ -866,20 +873,17 @@ public class PartitionUtils {
   }
 
   private static scala.collection.immutable.Map<String, Object> buildDvMetadata(
-      Optional<DeletionVectorDescriptor> dvOpt) {
-    Map<String, Object> metadata =
-        buildDvMetadata(dvOpt.map(DeletionVectorDescriptor::serializeToBase64).orElse(null));
-    return scala.collection.immutable.Map$.MODULE$.from(CollectionConverters.asScala(metadata));
-  }
-
-  private static scala.collection.immutable.Map<String, Object> buildDvMetadata(
       String dvBase64, RowIndexFilterType filterType) {
-    Map<String, Object> metadata = buildDvMetadataMap(dvBase64, filterType);
-    return scala.collection.immutable.Map$.MODULE$.from(CollectionConverters.asScala(metadata));
+    scala.collection.immutable.Map<String, Object> result = emptyScalaMap();
+    for (Map.Entry<String, Object> entry : buildDvMetadataMap(dvBase64, filterType).entrySet()) {
+      result = result.$plus(new Tuple2<>(entry.getKey(), entry.getValue()));
+    }
+    return result;
   }
 
   private static Map<String, Object> buildDvMetadataMap(
       String dvBase64, RowIndexFilterType filterType) {
+    Objects.requireNonNull(dvBase64, "dvBase64 is null");
     Map<String, Object> metadata = new HashMap<>();
     metadata.put(DeltaParquetFileFormat.FILE_ROW_INDEX_FILTER_ID_ENCODED(), dvBase64);
     metadata.put(DeltaParquetFileFormat.FILE_ROW_INDEX_FILTER_TYPE(), filterType);
