@@ -22,7 +22,9 @@ import io.delta.kernel.exceptions.{
 
 import org.apache.spark.SparkException
 
-private[v2] object DeltaV2StartVersionRetry {
+private[v2] object DeltaV2StartVersionRetry extends DeltaV2Logging {
+  private val RetryLogKeys = org.apache.spark.sql.delta.logging.DeltaLogKeys
+
   /**
    * Attempt 1 uses the requested start version. Attempt 2 uses the earliest available version.
    * Attempt 3 guards against another log-retention prune before the second attempt starts.
@@ -35,9 +37,9 @@ private[v2] object DeltaV2StartVersionRetry {
    */
   def fetchWithStartVersionRetry[T](
       startVersion: Long,
+      tablePath: String,
       failOnDataLoss: Boolean)(
-      fetch: Long => T)(
-      logRetry: (Int, Int, Long) => Unit): Option[T] = {
+      fetch: Long => T): Option[T] = {
     var earliestVersionToFetch = startVersion
     var attempt = 1
     while (attempt <= MaxAttempts) {
@@ -50,7 +52,13 @@ private[v2] object DeltaV2StartVersionRetry {
             throw e
           }
           earliestVersionToFetch = e.getEarliestAvailableVersion.get()
-          logRetry(attempt, MaxAttempts, earliestVersionToFetch)
+          logWarning(log"Start version commit " +
+            log"${MDC(RetryLogKeys.START_VERSION, startVersion)} no longer exists for table " +
+            log"${MDC(RetryLogKeys.PATH, tablePath)} " +
+            log"(attempt ${MDC(RetryLogKeys.ATTEMPT, attempt)}/" +
+            log"${MDC(RetryLogKeys.NUM_ATTEMPT, MaxAttempts)}). Skipping to earliest available " +
+            log"version ${MDC(RetryLogKeys.VERSION, earliestVersionToFetch)} because " +
+            log"failOnDataLoss is false.")
         case _: CommitRangeNotFoundException =>
           return None
       }

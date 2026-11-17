@@ -18,7 +18,6 @@ package org.apache.spark.sql.delta.v2.tablemanager
 import java.util.concurrent.atomic.AtomicReference
 
 import org.apache.spark.sql.delta.{DeltaSingleCommit, Snapshot}
-import org.apache.spark.sql.delta.logging.DeltaLogKeys
 import org.apache.spark.sql.delta.storage.{ClosableIterator, LogStoreProvider}
 import org.apache.spark.sql.delta.storage.ClosableIterator.ClosableWrapper
 import org.apache.spark.sql.delta.v2.{DeltaV2Logging, DeltaV2StartVersionRetry}
@@ -88,19 +87,12 @@ private[tablemanager] class DeltaV2TableManagerImpl(
     val hadoopConf = kernelContext.materializeHadoopConf()
     val commitRange = DeltaV2StartVersionRetry.fetchWithStartVersionRetry(
       startVersion,
+      tablePath.toString,
       failOnDataLoss) { earliestVersionToFetch =>
         cachedSnapshotManager.getTableChanges(
           kernelEngine,
           GetTableChangesParam(earliestVersionToFetch, endVersion, false, failOnDataLoss),
           queryContext)
-      } { (attempt, maxAttempts, earliestVersionToFetch) =>
-        logWarning(log"Start version commit " +
-          log"${MDC(DeltaLogKeys.START_VERSION, startVersion)} no longer exists for table " +
-          log"${MDC(DeltaLogKeys.PATH, tablePath)} " +
-          log"(attempt ${MDC(DeltaLogKeys.ATTEMPT, attempt)}/" +
-          log"${MDC(DeltaLogKeys.NUM_ATTEMPT, maxAttempts)}). Skipping to earliest available " +
-          log"version ${MDC(DeltaLogKeys.VERSION, earliestVersionToFetch)} because " +
-          log"failOnDataLoss is false.")
       }
     if (commitRange.isEmpty) {
       return new ClosableWrapper[DeltaSingleCommit](Iterator.empty).toClosable

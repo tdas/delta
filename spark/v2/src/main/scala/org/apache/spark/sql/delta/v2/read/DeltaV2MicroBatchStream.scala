@@ -1049,20 +1049,12 @@ private[read] class DeltaV2MicroBatchStream(
     // stricter than DSv1.
     val commitRange = DeltaV2StartVersionRetry.fetchWithStartVersionRetry(
       startVersion,
+      tablePath,
       options.failOnDataLoss) { earliestVersionToFetch =>
         snapshotManager.getTableChanges(
             engine,
             GetTableChangesParam.apply(earliestVersionToFetch, endVersionOpt),
             originalStreamingQueryContext)
-      } { (attempt, maxAttempts, earliestVersionToFetch) =>
-        logger.warn(
-            "Start version commit {} no longer exists for table {} (attempt {}/{}). "
-                + "Skipping to earliest available version {} because failOnDataLoss is false.",
-            Long.box(startVersion),
-            tablePath,
-            Int.box(attempt),
-            Int.box(maxAttempts),
-            Long.box(earliestVersionToFetch))
       }
     if (commitRange.isEmpty) {
       return new ClosableWrapper[CommitActions](Iterator.empty).toClosable
