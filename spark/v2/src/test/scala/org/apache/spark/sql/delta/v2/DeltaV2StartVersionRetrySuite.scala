@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.spark.sql.delta.v2
 
 import java.util.Optional
@@ -59,12 +58,17 @@ class DeltaV2StartVersionRetrySuite extends SparkFunSuite {
 
   test("rethrows a missing start version when data loss is disallowed") {
     val error = startVersionNotFound(5L, Some(7L))
+    var fetchCalls = 0
 
     val thrown = intercept[StartVersionNotFoundException] {
       DeltaV2StartVersionRetry.fetchWithStartVersionRetry(
-        5L, tablePath, failOnDataLoss = true)(_ => throw error)
+        5L, tablePath, failOnDataLoss = true) { _ =>
+        fetchCalls += 1
+        throw error
+      }
     }
 
+    assert(fetchCalls === 1)
     assert(thrown eq error)
   }
 
@@ -84,8 +88,12 @@ class DeltaV2StartVersionRetrySuite extends SparkFunSuite {
 
     assert(result.contains("result"))
     assert(fetchedVersions === Seq(5L, 7L))
-    assert(logs.loggingEvents.exists(_.getMessage.getFormattedMessage.contains(
-      "Skipping to earliest available version 7")))
+    val warningMessages = logs.loggingEvents
+      .filter(_.getLevel == Level.WARN)
+      .map(_.getMessage.getFormattedMessage)
+    assert(warningMessages === Seq(
+      "Start version commit 5 no longer exists for table /table (attempt 1/3). " +
+        "Skipping to earliest available version 7 because failOnDataLoss is false."))
   }
 
   test("rethrows the final missing start version after the maximum attempts") {
@@ -93,11 +101,13 @@ class DeltaV2StartVersionRetrySuite extends SparkFunSuite {
       startVersionNotFound(5L, Some(7L)),
       startVersionNotFound(7L, Some(8L)),
       startVersionNotFound(8L, Some(9L)))
+    val fetchedVersions = ArrayBuffer.empty[Long]
     var attempts = 0
 
     val thrown = intercept[StartVersionNotFoundException] {
       DeltaV2StartVersionRetry.fetchWithStartVersionRetry(
-        5L, tablePath, failOnDataLoss = false) { _ =>
+        5L, tablePath, failOnDataLoss = false) { version =>
+        fetchedVersions += version
         val error = errors(attempts)
         attempts += 1
         throw error
@@ -105,26 +115,37 @@ class DeltaV2StartVersionRetrySuite extends SparkFunSuite {
     }
 
     assert(attempts === 3)
+    assert(fetchedVersions === Seq(5L, 7L, 8L))
     assert(thrown eq errors.last)
   }
 
   test("rethrows a missing start version without an earliest available version") {
     val error = startVersionNotFound(5L, None)
+    var fetchCalls = 0
 
     val thrown = intercept[StartVersionNotFoundException] {
       DeltaV2StartVersionRetry.fetchWithStartVersionRetry(
-        5L, tablePath, failOnDataLoss = false)(_ => throw error)
+        5L, tablePath, failOnDataLoss = false) { _ =>
+        fetchCalls += 1
+        throw error
+      }
     }
 
+    assert(fetchCalls === 1)
     assert(thrown eq error)
   }
 
   test("returns None for an empty commit range") {
     val error = new CommitRangeNotFoundException(tablePath, 5L, Optional.of(Long.box(6L)))
+    var fetchCalls = 0
 
     val result = DeltaV2StartVersionRetry.fetchWithStartVersionRetry(
-      5L, tablePath, failOnDataLoss = false)(_ => throw error)
+      5L, tablePath, failOnDataLoss = false) { _ =>
+      fetchCalls += 1
+      throw error
+    }
 
+    assert(fetchCalls === 1)
     assert(result.isEmpty)
   }
 
