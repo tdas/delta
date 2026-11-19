@@ -406,10 +406,11 @@ public class PartitionUtils {
   /**
    * Build a PartitionedFile from a V1 AddFile produced by {@code DeltaV2Snapshot.filesForScan}. The
    * V1 file selection reuses the same file records the Kernel path stores (see {@code
-   * KernelSnapshotUtils.toV1AddFile}), so this mirrors the Kernel {@link #buildPartitionedFile}
-   * overload field-for-field: same path resolution, same DV / row-tracking metadata keys, same
-   * partition-row construction. Unlike the Kernel overload it does not assert the partition-value
-   * count, because V1 AddFile may omit unset partition keys.
+   * KernelSnapshotUtils.toV1AddFile}), so this mirrors the Kernel {@link
+   * #buildPartitionedFile(AddFile, PartitionValueCaster, String)} overload field-for-field: same
+   * path resolution, same DV / row-tracking metadata keys, same partition-row construction. Unlike
+   * the Kernel overload it does not assert the partition-value count, because V1 AddFile may omit
+   * unset partition keys.
    */
   public static PartitionedFile buildPartitionedFile(
       org.apache.spark.sql.delta.actions.AddFile v1AddFile,
@@ -857,7 +858,7 @@ public class PartitionUtils {
    *
    * <p>The metadata is used by DeltaParquetFileFormat to generate the is_row_deleted column. Uses
    * {@code IF_CONTAINED} filter semantics (visible-rows semantics). Returns an empty map when
-   * {@code dvBase64} is {@code null}.
+   * {@code dvOpt} is empty.
    */
   private static scala.collection.immutable.Map<String, Object> buildDvMetadata(
       Optional<DeletionVectorDescriptor> dvOpt) {
@@ -866,28 +867,35 @@ public class PartitionUtils {
         : emptyScalaMap();
   }
 
+  /**
+   * Java-map form of the DV metadata for {@code dvBase64} with {@code IF_CONTAINED} semantics, for
+   * callers that copy the entries into their own map. Returns an empty mutable map when {@code
+   * dvBase64} is {@code null}.
+   */
   public static Map<String, Object> buildDvMetadata(String dvBase64) {
     return dvBase64 == null
         ? new HashMap<>()
-        : buildDvMetadataMap(dvBase64, RowIndexFilterType.IF_CONTAINED);
+        : new HashMap<>(
+            CollectionConverters.asJava(
+                buildDvMetadata(dvBase64, RowIndexFilterType.IF_CONTAINED)));
   }
 
+  /**
+   * The single place that writes the two DV metadata entries. Inserts them directly into the Scala
+   * map because this runs once per scanned file that has a DV.
+   */
   private static scala.collection.immutable.Map<String, Object> buildDvMetadata(
       String dvBase64, RowIndexFilterType filterType) {
-    scala.collection.immutable.Map<String, Object> result = emptyScalaMap();
-    for (Map.Entry<String, Object> entry : buildDvMetadataMap(dvBase64, filterType).entrySet()) {
-      result = result.$plus(new Tuple2<>(entry.getKey(), entry.getValue()));
-    }
-    return result;
-  }
-
-  private static Map<String, Object> buildDvMetadataMap(
-      String dvBase64, RowIndexFilterType filterType) {
     Objects.requireNonNull(dvBase64, "dvBase64 is null");
-    Map<String, Object> metadata = new HashMap<>();
-    metadata.put(DeltaParquetFileFormat.FILE_ROW_INDEX_FILTER_ID_ENCODED(), dvBase64);
-    metadata.put(DeltaParquetFileFormat.FILE_ROW_INDEX_FILTER_TYPE(), filterType);
-    return metadata;
+    Objects.requireNonNull(filterType, "filterType is null");
+    scala.collection.immutable.Map<String, Object> result = emptyScalaMap();
+    result =
+        result.$plus(
+            new Tuple2<>(DeltaParquetFileFormat.FILE_ROW_INDEX_FILTER_ID_ENCODED(), dvBase64));
+    result =
+        result.$plus(
+            new Tuple2<>(DeltaParquetFileFormat.FILE_ROW_INDEX_FILTER_TYPE(), (Object) filterType));
+    return result;
   }
 
   /**
