@@ -32,10 +32,9 @@ import org.apache.spark.sql.delta.v2.kernel.KernelEngineFactory
 import org.apache.spark.sql.delta.v2.read.cdc.CDCSchemaContext
 import org.apache.spark.sql.delta.v2.read.deletionvector.DeletionVectorSchemaContext
 import org.apache.spark.sql.delta.v2.tablemanager.DeltaV2TableManager
-import org.apache.spark.sql.delta.v2.utils.{PartitionUtils, PartitionValueCaster, ScalaUtils}
+import org.apache.spark.sql.delta.v2.utils.{PartitionUtils, PartitionValueCaster, ReportedStatistics, ScalaUtils}
 import org.apache.spark.sql.delta.v2.utils.ExpressionUtils.dsv2PredicateToCatalystExpression
 import org.apache.spark.sql.delta.v2.utils.SchemaUtils
-import org.apache.spark.sql.delta.v2.utils.StatsUtils
 import org.apache.hadoop.conf.Configuration
 import io.delta.kernel.expressions.{Predicate => KernelPredicate}
 import io.delta.kernel.internal.{SnapshotImpl => KernelSnapshotImpl}
@@ -354,15 +353,12 @@ private[read] class DeltaV2Scan(
       sizeInBytesArg: Option[Long],
       numRowsArg: Option[Long],
       columnStatsArg: JMap[NamedReference, ColumnStatistics]
-  ): Statistics = {
-    val reportedSizeInBytes = sizeInBytesArg.toJavaPrimitive
-    val reportedNumRows = numRowsArg.toJavaPrimitive
-    StatsUtils.createStatistics(
-      reportedSizeInBytes,
-      reportedNumRows,
+  ): Statistics =
+    new ReportedStatistics(
+      sizeInBytesArg.toJavaPrimitive,
+      numRowsArg.toJavaPrimitive,
       columnStatsArg
     )
-  }
 
   /**
    * Delta requires Spark to retain fully pushed predicates when adjusting scan statistics. In
