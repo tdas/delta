@@ -28,7 +28,7 @@ import org.apache.spark.sql.connector.read.colstats.ColumnStatistics
  * instances holding equal values are not equal. Use a dedicated implementation where callers
  * need value equality.
  */
-class ReportedStatistics(
+private[v2] final class ReportedStatistics(
     reportedSizeInBytes: OptionalLong,
     reportedNumRows: OptionalLong,
     reportedColumnStats: JMap[NamedReference, ColumnStatistics]
